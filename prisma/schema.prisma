@@ -1,0 +1,510 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String               @id @default(cuid())
+  name            String
+  email           String               @unique
+  passwordHash    String
+  role            Role                 @default(WEIGHBRIDGE_OPERATOR)
+  isActive        Boolean              @default(true)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  auditLogs       AuditLog[]
+  millingSessions MillingSession[]
+  payments        PaymentTransaction[]
+  invoices        SalesInvoice[]
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String
+  action      String
+  entity      String
+  entityId    String
+  beforeState String?
+  afterState  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@index([entityId])
+  @@index([createdAt])
+}
+
+model Supplier {
+  id           String               @id @default(cuid())
+  name         String
+  contact      String?
+  gstin        String?
+  address      String?
+  balance      Decimal              @default(0.00)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  category     String               @default("PADDY_BROKER")
+  farmers      Farmer[]
+  ledgers      LedgerEntry[]
+  packingItems PackingItem[]
+  payments     PaymentTransaction[]
+  batches      ProcurementBatch[]
+}
+
+model Farmer {
+  id        String             @id @default(cuid())
+  name      String
+  contact   String?
+  village   String?
+  brokerId  String
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  balance   Decimal            @default(0.00)
+  broker    Supplier           @relation(fields: [brokerId], references: [id])
+  ledgers   LedgerEntry[]
+  batches   ProcurementBatch[]
+
+  @@index([brokerId])
+}
+
+model Customer {
+  id        String               @id @default(cuid())
+  name      String
+  contact   String?
+  gstin     String?
+  address   String?
+  balance   Decimal              @default(0.00)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+  ledgers   LedgerEntry[]
+  payments  PaymentTransaction[]
+  invoices  SalesInvoice[]
+}
+
+model Product {
+  id                 String             @id @default(cuid())
+  name               String
+  category           String
+  unit               String
+  hsnCode            String?
+  gstRate            Decimal            @default(0.00)
+  lots               Lot[]
+  procurementBatches ProcurementBatch[]
+  invoiceItems       SalesInvoiceItem[]
+  movements          StockMovement[]
+
+  @@index([category])
+}
+
+model Godown {
+  id            String             @id @default(cuid())
+  name          String
+  location      String?
+  capacity      Decimal?
+  type          String             @default("PADDY")
+  lots          Lot[]
+  packingItems  PackingItem[]
+  batches       ProcurementBatch[]
+  invoiceItems  SalesInvoiceItem[]
+  movementsFrom StockMovement[]    @relation("MovementFrom")
+  movementsTo   StockMovement[]    @relation("MovementTo")
+}
+
+model PackingItem {
+  id           String               @id @default(cuid())
+  brandName    String
+  capacityKg   Decimal
+  quantityBags Decimal              @default(0)
+  perBagRate   Decimal
+  godownId     String
+  hsnCode      String?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  status       String               @default("PAID")
+  supplierId   String?
+  amountPaid   Decimal              @default(0.00)
+  fullyPaidAt  DateTime?
+  godown       Godown               @relation(fields: [godownId], references: [id])
+  supplier     Supplier?            @relation(fields: [supplierId], references: [id])
+  payments     PaymentTransaction[]
+
+  @@index([godownId])
+  @@index([supplierId])
+  @@index([status])
+}
+
+model Vehicle {
+  id               String               @id @default(cuid())
+  licensePlate     String               @unique
+  type             String
+  tareWeight       Decimal?
+  balance          Decimal              @default(0.00)
+  contactNumber    String?
+  fitnessExpiry    DateTime?
+  insuranceExpiry  DateTime?
+  ownerName        String?
+  ownershipType    String               @default("OWNED")
+  pollutionExpiry  DateTime?
+  assignedDriverId String?
+  ledgers          LedgerEntry[]
+  payments         PaymentTransaction[]
+  batches          ProcurementBatch[]
+  invoices         SalesInvoice[]
+  assignedDriver   Laborer?             @relation("VehicleDriver", fields: [assignedDriverId], references: [id])
+
+  @@index([type])
+  @@index([assignedDriverId])
+}
+
+model Laborer {
+  id               String               @id @default(cuid())
+  name             String
+  type             String
+  contact          String?
+  balance          Decimal              @default(0.00)
+  wages            LaborWage[]
+  ledgers          LedgerEntry[]
+  payments         PaymentTransaction[]
+  assignedVehicles Vehicle[]            @relation("VehicleDriver")
+
+  @@index([type])
+}
+
+model Bank {
+  id            String               @id @default(cuid())
+  bankName      String
+  accountNumber String
+  ifscCode      String?
+  balance       Decimal              @default(0.00)
+  payments      PaymentTransaction[]
+}
+
+model ExpenseCategory {
+  id          String               @id @default(cuid())
+  name        String
+  description String?
+  type        String               @default("EXPENSE")
+  ledgers     LedgerEntry[]
+  payments    PaymentTransaction[]
+
+  @@index([type])
+}
+
+model ProcurementBatch {
+  id                     String               @id @default(cuid())
+  supplierId             String
+  vehicleId              String?
+  godownId               String?
+  grossWeight            Decimal
+  tareWeight             Decimal?
+  netWeight              Decimal?
+  normalizedWeight       Decimal?
+  totalPayable           Decimal?
+  status                 BatchStatus          @default(DRAFT)
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+  productId              String?
+  ratePerKg              Decimal?
+  farmerId               String?
+  numberOfBags           Decimal?
+  brokerCommissionRate   Decimal?
+  brokerCommissionTotal  Decimal?
+  farmerBagRate          Decimal?
+  farmerTotalPayable     Decimal?
+  perBagWeight           Decimal?
+  afterDryingMoisture    Decimal?             @default(14.0)
+  beforeDryingMoisture   Decimal?
+  dryingShortage         Decimal?
+  amountPaid             Decimal              @default(0.00)
+  fullyPaidAt            DateTime?
+  transportFreightAmount Decimal?             @default(0.00)
+  lot                    Lot?
+  payments               PaymentTransaction[]
+  farmer                 Farmer?              @relation(fields: [farmerId], references: [id])
+  godown                 Godown?              @relation(fields: [godownId], references: [id])
+  product                Product?             @relation(fields: [productId], references: [id])
+  supplier               Supplier             @relation(fields: [supplierId], references: [id])
+  vehicle                Vehicle?             @relation(fields: [vehicleId], references: [id])
+
+  @@index([status])
+  @@index([supplierId, status])
+  @@index([farmerId, brokerCommissionTotal])
+  @@index([status, ratePerKg, createdAt])
+  @@index([createdAt])
+  @@index([supplierId])
+  @@index([godownId])
+  @@index([productId])
+  @@index([vehicleId])
+}
+
+model LedgerEntry {
+  id                String           @id @default(cuid())
+  supplierId        String?
+  customerId        String?
+  transactionType   String
+  amount            Decimal
+  description       String
+  referenceId       String?
+  createdAt         DateTime         @default(now())
+  farmerId          String?
+  expenseCategoryId String?
+  itemName          String?
+  quantity          Decimal?
+  rate              Decimal?
+  vehicleId         String?
+  laborerId         String?
+  customer          Customer?        @relation(fields: [customerId], references: [id])
+  expenseCategory   ExpenseCategory? @relation(fields: [expenseCategoryId], references: [id])
+  farmer            Farmer?          @relation(fields: [farmerId], references: [id])
+  laborer           Laborer?         @relation(fields: [laborerId], references: [id])
+  supplier          Supplier?        @relation(fields: [supplierId], references: [id])
+  vehicle           Vehicle?         @relation(fields: [vehicleId], references: [id])
+
+  @@index([supplierId, createdAt])
+  @@index([farmerId, createdAt])
+  @@index([customerId, createdAt])
+  @@index([vehicleId])
+  @@index([expenseCategoryId])
+}
+
+model Lot {
+  id               String            @id @default(cuid())
+  productId        String
+  godownId         String
+  procurementId    String?           @unique
+  initialQuantity  Decimal
+  currentQuantity  Decimal
+  status           String            @default("ACTIVE")
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  dryingShortage   Decimal?          @default(0.00)
+  godown           Godown            @relation(fields: [godownId], references: [id])
+  procurementBatch ProcurementBatch? @relation(fields: [procurementId], references: [id])
+  product          Product           @relation(fields: [productId], references: [id])
+
+  @@index([productId, godownId, status, createdAt])
+  @@index([status, currentQuantity])
+  @@index([productId])
+  @@index([godownId])
+  @@index([procurementId])
+}
+
+model StockMovement {
+  id           String   @id @default(cuid())
+  productId    String
+  fromGodownId String?
+  toGodownId   String?
+  quantity     Decimal
+  type         String
+  referenceId  String?
+  userId       String
+  createdAt    DateTime @default(now())
+  fromGodown   Godown?  @relation("MovementFrom", fields: [fromGodownId], references: [id])
+  product      Product  @relation(fields: [productId], references: [id])
+  toGodown     Godown?  @relation("MovementTo", fields: [toGodownId], references: [id])
+
+  @@index([productId])
+  @@index([type])
+  @@index([createdAt])
+  @@index([fromGodownId])
+  @@index([toGodownId])
+}
+
+model MillingSession {
+  id                 String   @id @default(cuid())
+  userId             String
+  inputProductId     String
+  inputGodownId      String
+  inputQuantity      Decimal
+  fineRiceGodownId   String?
+  fineRiceQuantity   Decimal  @default(0.00)
+  brokenRiceGodownId String?
+  brokenRiceQuantity Decimal  @default(0.00)
+  branGodownId       String?
+  branQuantity       Decimal  @default(0.00)
+  huskGodownId       String?
+  huskQuantity       Decimal  @default(0.00)
+  totalYieldPercent  Decimal?
+  runtimeHours       Decimal?
+  status             String   @default("COMPLETED")
+  createdAt          DateTime @default(now())
+  user               User     @relation(fields: [userId], references: [id])
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model SalesInvoice {
+  id                     String               @id @default(cuid())
+  invoiceNumber          String               @unique
+  customerId             String
+  vehicleId              String?
+  subtotal               Decimal              @default(0.00)
+  taxTotal               Decimal              @default(0.00)
+  grandTotal             Decimal              @default(0.00)
+  status                 InvoiceStatus        @default(DRAFT)
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+  userId                 String
+  amountPaid             Decimal              @default(0.00)
+  fullyPaidAt            DateTime?
+  transportFreightAmount Decimal?             @default(0.00)
+  isModified             Boolean              @default(false)
+  originalGrandTotal     Decimal?
+  adjustmentAmount       Decimal?
+  buyersOrderNo          String?
+  deliveryNote           String?
+  destination            String?
+  dispatchDocNo          String?
+  modeOfPayment          String?
+  otherReferences        String?
+  termsOfDelivery        String?
+  vehicleNo              String?
+  payments               PaymentTransaction[]
+  customer               Customer             @relation(fields: [customerId], references: [id])
+  user                   User                 @relation(fields: [userId], references: [id])
+  vehicle                Vehicle?             @relation(fields: [vehicleId], references: [id])
+  items                  SalesInvoiceItem[]
+
+  @@index([customerId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([vehicleId])
+  @@index([userId])
+}
+
+model SalesInvoiceItem {
+  id              String       @id @default(cuid())
+  invoiceId       String
+  productId       String
+  godownId        String
+  quantity        Decimal
+  rate            Decimal
+  gstRate         Decimal
+  lineTotal       Decimal
+  taxAmount       Decimal
+  packingItemName String?
+  godown          Godown       @relation(fields: [godownId], references: [id])
+  invoice         SalesInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  product         Product      @relation(fields: [productId], references: [id])
+
+  @@index([invoiceId])
+  @@index([productId])
+}
+
+model PaymentTransaction {
+  id                 String            @id @default(cuid())
+  transactionDate    DateTime          @default(now())
+  type               PaymentType
+  mode               PaymentMode
+  amount             Decimal
+  referenceNumber    String?
+  customerId         String?
+  supplierId         String?
+  expenseCategoryId  String?
+  bankId             String?
+  notes              String?
+  userId             String
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  packingItemId      String?
+  procurementBatchId String?
+  salesInvoiceId     String?
+  vehicleId          String?
+  laborerId          String?
+  bank               Bank?             @relation(fields: [bankId], references: [id])
+  customer           Customer?         @relation(fields: [customerId], references: [id])
+  expenseCategory    ExpenseCategory?  @relation(fields: [expenseCategoryId], references: [id])
+  laborer            Laborer?          @relation(fields: [laborerId], references: [id])
+  packingItem        PackingItem?      @relation(fields: [packingItemId], references: [id])
+  procurementBatch   ProcurementBatch? @relation(fields: [procurementBatchId], references: [id])
+  salesInvoice       SalesInvoice?     @relation(fields: [salesInvoiceId], references: [id])
+  supplier           Supplier?         @relation(fields: [supplierId], references: [id])
+  user               User              @relation(fields: [userId], references: [id])
+  vehicle            Vehicle?          @relation(fields: [vehicleId], references: [id])
+
+  @@index([type])
+  @@index([customerId])
+  @@index([supplierId])
+  @@index([transactionDate])
+}
+
+model LaborWage {
+  id        String   @id @default(cuid())
+  laborerId String
+  date      DateTime @default(now())
+  workType  String
+  quantity  Decimal?
+  rate      Decimal?
+  totalWage Decimal
+  status    String   @default("UNPAID")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  laborer   Laborer  @relation(fields: [laborerId], references: [id])
+
+  @@index([laborerId])
+  @@index([status])
+}
+
+model Asset {
+  id               String           @id @default(cuid())
+  name             String
+  type             String
+  purchasePrice    Decimal
+  purchaseDate     DateTime
+  depreciationRate Decimal          @default(10.00)
+  maintenanceLogs  MaintenanceLog[]
+
+  @@index([type])
+}
+
+model MaintenanceLog {
+  id          String   @id @default(cuid())
+  assetId     String
+  date        DateTime @default(now())
+  type        String
+  cost        Decimal
+  downtimeHrs Decimal  @default(0)
+  notes       String?
+  asset       Asset    @relation(fields: [assetId], references: [id])
+
+  @@index([assetId])
+  @@index([date])
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  WEIGHBRIDGE_OPERATOR
+  FLOOR_MANAGER
+  ACCOUNTANT
+}
+
+enum BatchStatus {
+  DRAFT
+  FINALIZED
+  PAID
+  PARTIALLY_PAID
+}
+
+enum InvoiceStatus {
+  DRAFT
+  FINALIZED
+  PAID
+  PARTIALLY_PAID
+}
+
+enum PaymentType {
+  RECEIPT
+  PAYMENT
+}
+
+enum PaymentMode {
+  CASH
+  BANK
+  UPI
+}

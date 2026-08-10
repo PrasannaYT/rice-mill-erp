@@ -1,0 +1,55 @@
+'use server';
+
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { InventoryService } from "@/services/inventoryService";
+import { revalidatePath } from "next/cache";
+
+async function checkAuth() {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    throw new Error("Unauthorized");
+  }
+  const allowedRoles = ['ADMIN', 'MANAGER', 'FLOOR_MANAGER'];
+  if (!allowedRoles.includes(session.user.role)) {
+    throw new Error("Forbidden: Insufficient privileges");
+  }
+  return session;
+}
+
+export async function convertPaddyToRiceAction(formData: FormData) {
+  const session = await checkAuth();
+
+  const sourceGodownId = formData.get('sourceGodownId') as string;
+  const destinationGodownId = formData.get('destinationGodownId') as string;
+  const productId = formData.get('productId') as string;
+  const paddyQuantityKg = parseFloat(formData.get('paddyQuantityKg') as string) || 0;
+  const milledOutputsStr = formData.get('milledOutputs') as string;
+
+  if (!sourceGodownId) throw new Error("Source Paddy Godown is required");
+  if (!destinationGodownId) throw new Error("Destination Rice Godown is required");
+  if (!productId) throw new Error("Paddy product is required");
+  if (paddyQuantityKg <= 0) throw new Error("Paddy quantity must be positive");
+  if (!milledOutputsStr) throw new Error("Milled output rows are required");
+
+  let milledOutputs: Array<{ outputType: string; bagCapacityKg: number; numberOfBags: number; quantityKg: number }> = [];
+  try {
+    milledOutputs = JSON.parse(milledOutputsStr) as Array<{ outputType: string; bagCapacityKg: number; numberOfBags: number; quantityKg: number }>;
+  } catch (_e) {
+    throw new Error("Invalid milled outputs format");
+  }
+
+  await InventoryService.convertPaddyToRice({
+    sourceGodownId,
+    destinationGodownId,
+    productId,
+    paddyQuantityKg,
+    milledOutputs,
+    userId: session.user.id
+  });
+
+  revalidatePath('/admin/inventory');
+  revalidatePath('/operator/milling');
+  revalidatePath('/dashboard');
+  revalidatePath('/admin/reports');
+}

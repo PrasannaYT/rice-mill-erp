@@ -1,26 +1,517 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   RICE MILL ERP – DESIGN SYSTEM
+   Neo-Brutalist × Industrial
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+:root {
+  /* Brand Colors */
+  --gold:    #F5A623;
+  --gold-dark: #D4891A;
+  --green:   #2D6A4F;
+  --green-light: #40916C;
+  --cream:   #FAFAF7;
+  --charcoal:#1A1A18;
+  --ink:     #0D0D0B;
+  --dust:    #E8E5DC;
+  --rust:    #C1440E;
+  
+  /* Light mode surfaces */
+  --bg:      #FAFAF7;
+  --surface: #FFFFFF;
+  --surface-2: #F0EDE4;
+  --border:  #1A1A18;
+  --text:    #0D0D0B;
+  --muted:   #6B6860;
+  
+  /* Brutalist shadow */
+  --shadow-sm:  3px 3px 0px #0D0D0B;
+  --shadow-md:  4px 4px 0px #0D0D0B;
+  --shadow-lg:  6px 6px 0px #0D0D0B;
+  --shadow-xl:  8px 8px 0px #0D0D0B;
+  
+  /* Typography — CSS variables injected by next/font on <html> */
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-body:    'Inter', sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --bg:      #0D0D0B;
+    --surface: #1A1A18;
+    --surface-2: #242420;
+    --border:  #F5A623;
+    --text:    #FAFAF7;
+    --muted:   #9B9890;
+    --shadow-sm:  3px 3px 0px #F5A623;
+    --shadow-md:  4px 4px 0px #F5A623;
+    --shadow-lg:  6px 6px 0px #F5A623;
+    --shadow-xl:  8px 8px 0px #F5A623;
   }
 }
 
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+}
+
+/* ━━━━━━━ GLOBAL BASE ━━━━━━━ */
+*, *::before, *::after {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Strip Native Form Styles (Safari/Firefox Mobile) */
+input:not([type="checkbox"]):not([type="radio"]), select, button {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+
+html {
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: var(--gold) #1a1a1a;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body), 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overscroll-behavior: none;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display), 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+/* ━━━━━━━ BRUTALIST UTILITIES ━━━━━━━ */
+
+/* Hard offset shadows */
+.shadow-brutal-sm  { box-shadow: var(--shadow-sm); }
+.shadow-brutal     { box-shadow: var(--shadow-md); }
+.shadow-brutal-lg  { box-shadow: var(--shadow-lg); }
+.shadow-brutal-xl  { box-shadow: var(--shadow-xl); }
+
+/* Border utility */
+.border-brutal {
+  border: 2px solid var(--border);
+}
+.border-brutal-thick {
+  border: 3px solid var(--border);
+}
+
+/* Fix mobile viewport height for fixed overlays */
+.fixed.inset-0 {
+  height: 100vh;
+  height: 100dvh;
+}
+
+/* Mobile scroll utilities */
+.hide-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Brutalist card */
+.card-brutal {
+  background: var(--surface);
+  border: 2px solid var(--border);
+  box-shadow: var(--shadow-md);
+  border-radius: 4px;
+  transition: box-shadow 150ms ease, transform 150ms ease;
+}
+.card-brutal:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translate(-2px, -2px);
+}
+
+/* Gold accent line */
+.accent-bar {
+  border-left: 4px solid var(--gold);
+  padding-left: 12px;
+}
+
+/* ━━━━━━━ BUTTONS ━━━━━━━ */
+.btn {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.875rem;
+  letter-spacing: 0.02em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: 4px;
+  border: 2px solid var(--border);
+  cursor: pointer;
+  transition: box-shadow 120ms ease, transform 120ms ease, background 120ms ease;
+  user-select: none;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: none !important;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* ━━━━━━━ FOCUS-VISIBLE (A11y §4) ━━━━━━━
+   Gold ring on keyboard focus — visible on ALL interactive elements.
+   Uses :focus-visible so mouse users are unaffected. */
+:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Override for inputs — ring appears inside the box-shadow system */
+.input-brutal:focus-visible {
+  outline: none; /* handled by existing box-shadow rule */
+}
+
+/* Ensure bottom nav items and links inside cards also get the ring */
+a:focus-visible,
+button:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+  border-radius: 4px;
+  z-index: 1;
+}
+
+.btn-primary {
+  background: var(--gold);
+  color: var(--ink);
+  box-shadow: var(--shadow-md);
+}
+.btn-primary:hover {
+  background: var(--gold-dark);
+  box-shadow: var(--shadow-lg);
+  transform: translate(-2px, -2px);
+}
+
+.btn-dark {
+  background: var(--charcoal);
+  color: #FAFAF7;
+  box-shadow: var(--shadow-md);
+}
+.btn-dark:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translate(-2px, -2px);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text);
+  box-shadow: none;
+  border-color: var(--border);
+}
+.btn-ghost:hover {
+  background: var(--surface-2);
+  box-shadow: var(--shadow-sm);
+  transform: translate(-1px, -1px);
+}
+
+.btn-danger {
+  background: var(--rust);
+  color: white;
+  box-shadow: 4px 4px 0px #8B2E06;
+}
+.btn-danger:hover {
+  box-shadow: 6px 6px 0px #8B2E06;
+  transform: translate(-2px, -2px);
+}
+
+.btn-green {
+  background: var(--green);
+  color: white;
+  box-shadow: 4px 4px 0px #1B4332;
+}
+.btn-green:hover {
+  background: var(--green-light);
+  box-shadow: 6px 6px 0px #1B4332;
+  transform: translate(-2px, -2px);
+}
+
+.btn-sm {
+  padding: 6px 14px;
+  font-size: 0.78rem;
+}
+
+.btn-lg {
+  padding: 14px 28px;
+  font-size: 1rem;
+}
+
+.btn-icon {
+  padding: 10px;
+  aspect-ratio: 1;
+}
+
+/* ━━━━━━━ FORM INPUTS ━━━━━━━ */
+.input-brutal {
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  width: 100%;
+  padding: 10px 14px;
+  border: 2px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  outline: none;
+  transition: box-shadow 120ms ease;
+  box-shadow: 2px 2px 0px var(--border);
+}
+
+.input-brutal:focus {
+  box-shadow: 4px 4px 0px var(--gold);
+  border-color: var(--gold);
+}
+
+.input-brutal::placeholder {
+  color: var(--muted);
+}
+
+/* Hide default browser arrows for number inputs globally */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+.label-brutal {
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  display: block;
+  margin-bottom: 6px;
+}
+
+/* ━━━━━━━ BADGE CHIPS ━━━━━━━ */
+.badge {
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 3px;
+  border: 1.5px solid currentColor;
+  white-space: nowrap;
+}
+.badge-gold   { background: #FEF3C7; color: #92400E; border-color: #F59E0B; }
+.badge-green  { background: #D1FAE5; color: #065F46; border-color: #10B981; }
+.badge-red    { background: #FEE2E2; color: #991B1B; border-color: #EF4444; }
+.badge-blue   { background: #DBEAFE; color: #1E40AF; border-color: #3B82F6; }
+.badge-slate  { background: #F1F5F9; color: #475569; border-color: #94A3B8; }
+
+/* ━━━━━━━ TABLES ━━━━━━━ */
+.table-brutal {
+  width: 100%;
+  border-collapse: collapse;
+  border: 2px solid var(--border);
+}
+.table-brutal th {
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 10px 14px;
+  background: var(--charcoal);
+  color: #FAFAF7;
+  text-align: left;
+  border-bottom: 2px solid var(--border);
+}
+.table-brutal td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--dust);
+  font-size: 0.875rem;
+}
+.table-brutal tr:last-child td {
+  border-bottom: none;
+}
+.table-brutal tbody tr:hover td {
+  background: var(--surface-2);
+}
+
+
+/* ━━━━━━━ STAT CARDS ━━━━━━━ */
+.stat-card {
+  background: var(--surface);
+  border: 2px solid var(--border);
+  box-shadow: var(--shadow-md);
+  border-radius: 4px;
+  padding: 20px;
+}
+.stat-card .stat-label {
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.stat-card .stat-value {
+  font-family: var(--font-display);
+  font-size: 1.9rem;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+/* ━━━━━━━ ANIMATIONS ━━━━━━━ */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes slideLeft {
+  from { opacity: 0; transform: translateX(32px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes pulse-gold {
+  0%, 100% { box-shadow: 0 0 0 0px rgba(245,166,35,0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(245,166,35,0); }
+}
+
+.animate-fade-up    { animation: fadeUp 0.5s ease forwards; }
+.animate-fade-in    { animation: fadeIn 0.4s ease forwards; }
+.animate-slide-left { animation: slideLeft 0.45s ease forwards; }
+.animate-pulse-gold { animation: pulse-gold 2s ease-in-out infinite; }
+
+/* Stagger children */
+.stagger > *:nth-child(1) { animation-delay: 0ms; }
+.stagger > *:nth-child(2) { animation-delay: 80ms; }
+.stagger > *:nth-child(3) { animation-delay: 160ms; }
+.stagger > *:nth-child(4) { animation-delay: 240ms; }
+.stagger > *:nth-child(5) { animation-delay: 320ms; }
+.stagger > *:nth-child(6) { animation-delay: 400ms; }
+
+/* ━━━━━━━ SKELETON LOADER (Loading States §3) ━━━━━━━ */
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.skeleton {
+  display: block;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 25%,
+    var(--dust)      50%,
+    var(--surface-2) 75%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.4s infinite linear;
+}
+
+/* Dark mode: slightly brighter shimmer */
+@media (prefers-color-scheme: dark) {
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--surface-2) 25%,
+      #2E2E2A          50%,
+      var(--surface-2) 75%
+    );
+    background-size: 800px 100%;
+  }
+}
+
+/* ━━━━━━━ PAGE WRAPPER ━━━━━━━ */
+.page-wrapper {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: max(24px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+@media (min-width: 768px) {
+  .page-wrapper {
+    padding: 32px 32px;
+  }
+}
+
+/* ━━━━━━━ SCROLLBAR ━━━━━━━ */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--gold); border-radius: 3px; }
+
+@media (max-width: 768px) {
+  * {
+    -ms-overflow-style: none !important;
+    scrollbar-width: none !important;
+  }
+  ::-webkit-scrollbar {
+    display: none !important;
+  }
+}
+
+/* ━━━━━━━ SELECTION ━━━━━━━ */
+::selection {
+  background: var(--gold);
+  color: var(--ink);
+}
+
+/* ━━━━━━━ PRINT STYLES ━━━━━━━ */
+@media print {
+  @page {
+    size: A4;
+    margin: 0; /* Margin 0 strictly removes all browser headers and footers */
+  }
+  
+  body {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    background: white !important;
+  }
+  
+  /* Hide elements with print:hidden */
+  .print\:hidden {
+    display: none !important;
+  }
+}
+
+/* ━━━━━━━ PDF EXPORT STYLES ━━━━━━━ */
+#invoice-print-area[data-exporting="true"] input,
+#invoice-print-area[data-exporting="true"] textarea {
+  border: none !important;
+  background-color: transparent !important;
 }
