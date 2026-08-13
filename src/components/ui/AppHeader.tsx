@@ -233,11 +233,12 @@ export function AppHeader({
               </button>
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   if (typeof window !== 'undefined') {
                     sessionStorage.removeItem('erpsplash_shown');
                   }
-                  void signOut({ callbackUrl: '/login' });
+                  await signOut({ callbackUrl: '/login', redirect: true });
+                  window.location.href = '/login';
                 }}
                 className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white font-black uppercase tracking-wider text-xs rounded-xl shadow-lg transition-colors flex items-center justify-center gap-2"
               >
