@@ -43,14 +43,11 @@ export class ReportService {
   }
 
   /**
-   * Heavy analytics function — wrapped with Next.js unstable_cache for a 5-minute TTL.
-   * Call this export instead of the raw static method from page components.
+   * Heavy analytics function — fetches 100% live data directly from database via parallel Promise.all.
    */
-  static getAdvancedAnalytics = unstable_cache(
-    () => ReportService._getAdvancedAnalyticsRaw(),
-    ['advanced_analytics_v2'],
-    { revalidate: 3600, tags: ['analytics'] }
-  );
+  static async getAdvancedAnalytics() {
+    return ReportService._getAdvancedAnalyticsRaw();
+  }
 
   /**
    * Raw (uncached) implementation. All 9 independent top-level Prisma queries are
@@ -79,6 +76,8 @@ export class ReportService {
       paymentModes,
       millingCount,
       laborWorkTypes,
+      packingItems,
+      spares,
     ] = await Promise.all([
       // 1. Yield analysis
       prisma.millingSession.aggregate({
@@ -176,6 +175,17 @@ export class ReportService {
         by: ['workType'],
         _sum: { totalWage: true },
       }),
+
+      // 14. Packing Items
+      prisma.packingItem.findMany({
+        where: { quantityBags: { gt: 0 } },
+        include: { godown: true }
+      }),
+
+      // 15. Spare Parts
+      prisma.sparePart.findMany({
+        where: { availableQty: { gt: 0 } }
+      })
     ]);
 
     // ─── 1. Yield Analytics ──────────────────────────────────────────────────
@@ -264,11 +274,12 @@ export class ReportService {
     }));
 
     // ─── 5. Inventory Valuation (Grouped by Godown) ─────────────────────────
-    const getStandardRate = (category: string, productName: string = ''): number => {
+    const getStandardRate = (category: string, productName: string = '', godownType: string = ''): number => {
       const cat = (category || '').toUpperCase();
       const name = (productName || '').toLowerCase();
+      const gType = (godownType || '').toUpperCase();
+      if (cat === 'FINISHED_GOOD' || cat.includes('RICE') || name.includes('rice') || gType === 'RICE') return 45;
       if (cat === 'RAW_MATERIAL' || name.includes('paddy')) return 22;
-      if (cat === 'FINISHED_GOOD' || name.includes('rice')) return 45;
       if (cat === 'BYPRODUCT' || name.includes('bran') || name.includes('husk')) return 15;
       return 25;
     };
@@ -277,6 +288,7 @@ export class ReportService {
     const godownMap = new Map<string, {
       godownId: string;
       godownName: string;
+      godownType: string;
       location: string;
       totalValue: Decimal;
       totalQuantityKg: Decimal;
@@ -288,8 +300,24 @@ export class ReportService {
       }>;
     }>();
 
-    const valuation = lots.map(lot => {
-      const rate = getStandardRate(lot.product.category, lot.product.name);
+    const valuation: Array<{
+      product: string;
+      category: string;
+      quantity: number;
+      estimatedValue: number;
+      godownName?: string;
+    }> = [];
+
+    for (const lot of lots) {
+      const gType = (lot.godown as any)?.type || '';
+      const isRice = lot.product.category === 'FINISHED_GOOD' || 
+                     lot.product.category === 'RICE' || 
+                     (lot.product.name.toLowerCase().includes('rice') && !lot.product.name.toLowerCase().includes('paddy')) || 
+                     gType === 'RICE' ||
+                     (lot.godown?.name || '').toLowerCase().includes('rice');
+      
+      const effectiveCategory = isRice ? 'FINISHED_GOOD' : lot.product.category;
+      const rate = getStandardRate(effectiveCategory, lot.product.name, gType);
       const value = new Decimal(lot.currentQuantity).times(rate);
       totalValuation = totalValuation.plus(value);
 
@@ -300,31 +328,113 @@ export class ReportService {
       const existingGodown = godownMap.get(gId) || {
         godownId: gId,
         godownName: gName,
+        godownType: gType,
         location: gLoc,
         totalValue: new Decimal(0),
         totalQuantityKg: new Decimal(0),
-        items: []
+        items: [] as Array<{ product: string; category: string; quantity: number; estimatedValue: number }>
       };
 
       existingGodown.totalValue = existingGodown.totalValue.plus(value);
       existingGodown.totalQuantityKg = existingGodown.totalQuantityKg.plus(lot.currentQuantity);
       existingGodown.items.push({
         product: lot.product.name,
-        category: lot.product.category,
+        category: effectiveCategory,
         quantity: lot.currentQuantity.toNumber(),
         estimatedValue: value.toNumber(),
       });
       godownMap.set(gId, existingGodown);
 
-      return {
-        godownId: gId,
-        godownName: gName,
+      valuation.push({
         product: lot.product.name,
-        category: lot.product.category,
+        category: effectiveCategory,
         quantity: lot.currentQuantity.toNumber(),
         estimatedValue: value.toNumber(),
+        godownName: gName,
+      });
+    }
+
+    for (const pkg of packingItems) {
+      const rate = Number(pkg.perBagRate);
+      const qty = Number(pkg.quantityBags);
+      const value = new Decimal(qty).times(rate);
+      totalValuation = totalValuation.plus(value);
+
+      const gId = pkg.godownId;
+      const gName = pkg.godown?.name || 'Unassigned Storage';
+      const gLoc = pkg.godown?.location || 'Main Storage';
+
+      const existingGodown = godownMap.get(gId) || {
+        godownId: gId,
+        godownName: gName,
+        godownType: (pkg.godown as any)?.type || 'PACKAGING',
+        location: gLoc,
+        totalValue: new Decimal(0),
+        totalQuantityKg: new Decimal(0),
+        items: [] as Array<{ product: string; category: string; quantity: number; estimatedValue: number }>
       };
-    });
+
+      existingGodown.totalValue = existingGodown.totalValue.plus(value);
+      // Not adding bag count to totalQuantityKg to prevent skewing Kg metrics
+
+      existingGodown.items.push({
+        product: `${pkg.brandName} (${pkg.capacityKg}kg Bags)`,
+        category: 'PACKAGING_MATERIAL',
+        quantity: qty,
+        estimatedValue: value.toNumber()
+      });
+
+      godownMap.set(gId, existingGodown);
+
+      valuation.push({
+        product: `${pkg.brandName} (${pkg.capacityKg}kg Bags)`,
+        category: 'PACKAGING_MATERIAL',
+        quantity: qty,
+        estimatedValue: value.toNumber(),
+        godownName: gName
+      });
+    }
+
+    for (const spare of spares) {
+      const rate = Number(spare.ratePerUnit);
+      const qty = Number(spare.availableQty);
+      const value = new Decimal(qty).times(rate);
+      totalValuation = totalValuation.plus(value);
+
+      const gId = 'spares-godown';
+      const gName = 'Maintenance Spares Storage';
+      const gLoc = 'Mill Premise';
+
+      const existingGodown = godownMap.get(gId) || {
+        godownId: gId,
+        godownName: gName,
+        godownType: 'SPARES',
+        location: gLoc,
+        totalValue: new Decimal(0),
+        totalQuantityKg: new Decimal(0),
+        items: [] as Array<{ product: string; category: string; quantity: number; estimatedValue: number }>
+      };
+
+      existingGodown.totalValue = existingGodown.totalValue.plus(value);
+      // Not adding units to totalQuantityKg to prevent skewing Kg metrics
+
+      existingGodown.items.push({
+        product: spare.name,
+        category: 'SPARE_PART',
+        quantity: qty,
+        estimatedValue: value.toNumber()
+      });
+
+      godownMap.set(gId, existingGodown);
+
+      valuation.push({
+        product: spare.name,
+        category: 'SPARE_PART',
+        quantity: qty,
+        estimatedValue: value.toNumber(),
+        godownName: gName
+      });
+    }
 
     const godownValuationSummary = Array.from(godownMap.values()).map(g => ({
       godownId: g.godownId,

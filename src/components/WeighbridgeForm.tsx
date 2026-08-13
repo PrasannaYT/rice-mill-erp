@@ -2,8 +2,8 @@
 
 import { useState, useMemo } from 'react';
 import { toast } from 'sonner';
-import { Scale, Droplets, Receipt, Clock, Truck, Trash2, Package, Plus, Tags, CheckCircle, Camera, TrendingUp } from 'lucide-react';
-import { createDraftBatchAction, finalizeBatchAction, cancelDraftBatchAction, autoSaveDraftAction } from '@/app/actions/procurement';
+import { Scale, Droplets, Receipt, Clock, Truck, Trash2, Package, Plus, Tags, CheckCircle, Camera, TrendingUp, Users } from 'lucide-react';
+import { createDraftBatchAction, finalizeBatchAction, cancelDraftBatchAction, autoSaveDraftAction, createRiceProcurementAction } from '@/app/actions/procurement';
 import { createPackingItemAction } from '@/app/actions/packingItem';
 import QuickAddModal, { type EntityType } from './QuickAddModal';
 import { Input, Select } from '@/components/ui/Input';
@@ -39,13 +39,14 @@ export default function WeighbridgeForm({
   products: Product[], 
   godowns: Godown[],
   pendingDrafts?: Draft[],
-  initialTab?: 'PADDY' | 'PACKAGING' | 'FORECAST',
+  initialTab?: 'PADDY' | 'PACKAGING' | 'RICE',
   predictiveLeads?: PredictiveLead[],
   availableVarieties?: string[]
 }) {
-  const [procurementTab, setProcurementTab] = useState<'PADDY' | 'PACKAGING' | 'FORECAST'>(initialTab);
+  const [procurementTab, setProcurementTab] = useState<'PADDY' | 'PACKAGING' | 'RICE'>(initialTab);
   const [mobileStep, setMobileStep] = useState<1 | 2 | 3>(1);
   const [showMobileQueue, setShowMobileQueue] = useState(false);
+  const [showForecast, setShowForecast] = useState(false);
 
   const [localSuppliers, setLocalSuppliers] = useState<Supplier[]>(suppliers);
   const [localFarmers, setLocalFarmers] = useState(farmers);
@@ -90,13 +91,29 @@ export default function WeighbridgeForm({
   const [pkgHsnCode, setPkgHsnCode] = useState('');
   const [isPkgSubmitting, setIsPkgSubmitting] = useState(false);
 
-  // Separate Paddy Brokers from Bag Vendors
+  // Rice form states
+  const [riceSupplierId, setRiceSupplierId] = useState('');
+  const [riceProductId, setRiceProductId] = useState('');
+  const [riceGodownId, setRiceGodownId] = useState('');
+  const [riceMeasureMode, setRiceMeasureMode] = useState<'WEIGHBRIDGE' | 'BAGS'>('WEIGHBRIDGE');
+  const [riceGrossWeight, setRiceGrossWeight] = useState('');
+  const [riceTareWeight, setRiceTareWeight] = useState('');
+  const [riceNumBags, setRiceNumBags] = useState('');
+  const [ricePerBagWeight, setRicePerBagWeight] = useState('');
+  const [riceRate, setRiceRate] = useState('');
+  const [isRiceSubmitting, setIsRiceSubmitting] = useState(false);
+
+  // Separate Paddy Brokers from Bag Vendors and Rice Suppliers
   const paddyBrokers = useMemo(() => {
-    return localSuppliers.filter(s => s.category !== 'BAG_VENDOR');
+    return localSuppliers.filter(s => s.category === 'PADDY_BROKER' || (!s.category || (s.category !== 'BAG_VENDOR' && s.category !== 'RICE_MILL' && s.category !== 'RICE_SUPPLIER')));
   }, [localSuppliers]);
 
   const bagVendors = useMemo(() => {
     return localSuppliers.filter(s => s.category === 'BAG_VENDOR');
+  }, [localSuppliers]);
+
+  const riceMillOwners = useMemo(() => {
+    return localSuppliers.filter(s => s.category === 'RICE_MILL' || s.category === 'RICE_SUPPLIER');
   }, [localSuppliers]);
 
 
@@ -170,6 +187,32 @@ export default function WeighbridgeForm({
     }
     return '0.00';
   }, [farmerBagRate, perBagWeight]);
+
+  // Rice Calculations
+  const riceNetWeight = useMemo(() => {
+    if (riceMeasureMode === 'WEIGHBRIDGE') {
+      const gross = parseFloat(riceGrossWeight) || 0;
+      const tare = parseFloat(riceTareWeight) || 0;
+      return (gross - tare > 0 ? (gross - tare).toFixed(2) : '0.00');
+    } else {
+      const bags = parseFloat(riceNumBags) || 0;
+      const weight = parseFloat(ricePerBagWeight) || 0;
+      return (bags * weight > 0 ? (bags * weight).toFixed(2) : '0.00');
+    }
+  }, [riceMeasureMode, riceGrossWeight, riceTareWeight, riceNumBags, ricePerBagWeight]);
+
+  const riceTotalPayable = useMemo(() => {
+    const rate = parseFloat(riceRate) || 0;
+    if (riceMeasureMode === 'WEIGHBRIDGE') {
+      // Rate is per quintal (100 kg)
+      const net = parseFloat(riceNetWeight) || 0;
+      return ((net / 100) * rate).toFixed(2);
+    } else {
+      // Rate is per bag
+      const bags = parseFloat(riceNumBags) || 0;
+      return (bags * rate).toFixed(2);
+    }
+  }, [riceMeasureMode, riceRate, riceNetWeight, riceNumBags]);
 
   const clearForm = () => {
     setBatchId(null);
@@ -296,6 +339,46 @@ export default function WeighbridgeForm({
     }
   };
 
+  const handleRiceProcurementSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsRiceSubmitting(true);
+    setErrorMsg(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('supplierId', riceSupplierId);
+      formData.append('productId', riceProductId);
+      formData.append('godownId', riceGodownId);
+      formData.append('measureMode', riceMeasureMode);
+      
+      if (riceMeasureMode === 'WEIGHBRIDGE') {
+        formData.append('grossWeight', riceGrossWeight);
+        formData.append('tareWeight', riceTareWeight);
+      } else {
+        formData.append('numberOfBags', riceNumBags);
+        formData.append('perBagWeight', ricePerBagWeight);
+      }
+      
+      formData.append('rate', riceRate);
+
+      await createRiceProcurementAction(formData);
+      
+      toast.success('Rice Procurement Finalized! Sent to Cashier.');
+      setRiceSupplierId('');
+      setRiceProductId('');
+      setRiceGodownId('');
+      setRiceGrossWeight('');
+      setRiceTareWeight('');
+      setRiceNumBags('');
+      setRicePerBagWeight('');
+      setRiceRate('');
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Failed to procure rice');
+    } finally {
+      setIsRiceSubmitting(false);
+    }
+  };
+
   const executeCancelDraft = async () => {
     if (!batchId) return;
     setConfirmState({ ...confirmState, isOpen: false });
@@ -319,7 +402,7 @@ export default function WeighbridgeForm({
     });
   };
 
-  const handleAddSuccess = (newItem: { id: string; name: string; brokerId?: string }) => {
+  const handleAddSuccess = (newItem: { id: string; name: string; brokerId?: string; type?: string; category?: string }) => {
     setModalOpen(false);
     if (modalEntity === 'SUPPLIER') {
       const supplierItem = { ...newItem, category: 'PADDY_BROKER' };
@@ -330,6 +413,10 @@ export default function WeighbridgeForm({
       const vendorItem = { ...newItem, category: 'BAG_VENDOR' };
       setLocalSuppliers(prev => [...prev, vendorItem]);
       setPkgSupplierId(newItem.id);
+    } else if (modalEntity === 'RICE_MILL') {
+      const millItem = { ...newItem, category: 'RICE_MILL' };
+      setLocalSuppliers(prev => [...prev, millItem]);
+      setRiceSupplierId(newItem.id);
     } else if (modalEntity === 'FARMER') {
       const farmerItem: Farmer = {
         id: newItem.id,
@@ -342,13 +429,25 @@ export default function WeighbridgeForm({
       setLocalProducts([...localProducts, newItem]);
       if (procurementTab === 'PACKAGING') {
         setPkgBrandName(newItem.name);
+      } else if (procurementTab === 'RICE') {
+        setRiceProductId(newItem.id);
       } else {
         setProductId(newItem.id);
       }
     } else if (modalEntity === 'GODOWN') {
-      setLocalGodowns([...localGodowns, newItem]);
-      setGodownId(newItem.id);
-      setPkgGodownId(newItem.id);
+      const godownItem = { 
+        id: newItem.id, 
+        name: newItem.name, 
+        type: newItem.type || (procurementTab === 'PACKAGING' ? 'PACKAGING' : procurementTab === 'RICE' ? 'RICE' : 'PADDY') 
+      };
+      setLocalGodowns(prev => [...prev, godownItem]);
+      if (procurementTab === 'PACKAGING') {
+        setPkgGodownId(newItem.id);
+      } else if (procurementTab === 'RICE') {
+        setRiceGodownId(newItem.id);
+      } else {
+        setGodownId(newItem.id);
+      }
     }
   };
 
@@ -356,11 +455,12 @@ export default function WeighbridgeForm({
     <div className="max-w-7xl mx-auto space-y-6 mt-4">
       
       {/* Top Procurement Mode Selector Tabs */}
-      <nav aria-label="Procurement Mode Sections" className="grid grid-cols-3 gap-2 p-1.5 bg-[#1A1A1A] border border-neutral-800 rounded-2xl shadow-xl w-full sm:w-auto relative">
+      <nav aria-label="Procurement Mode Sections" className="grid grid-cols-3 gap-2 p-1.5 bg-[#1A1A1A] border border-neutral-800 rounded-2xl shadow-xl w-full sm:w-auto relative overflow-x-auto">
+
         <button
           type="button"
           onClick={() => setProcurementTab('PADDY')}
-          className={`py-3.5 px-2 rounded-xl font-display font-black text-xs uppercase tracking-wider transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 border focus-visible:ring-2 focus-visible:ring-[#F5A623] focus-visible:outline-none min-h-[44px] relative z-10 ${
+          className={`py-3.5 px-2 rounded-xl font-display font-black text-[10px] sm:text-xs uppercase tracking-wider transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 border focus-visible:ring-2 focus-visible:ring-[#F5A623] focus-visible:outline-none min-h-[44px] relative z-10 ${
             procurementTab === 'PADDY'
               ? 'bg-[#F5A623] text-black border-[#F5A623] shadow-md scale-[1.02]'
               : 'bg-transparent text-neutral-400 border-transparent hover:text-white'
@@ -372,8 +472,21 @@ export default function WeighbridgeForm({
 
         <button
           type="button"
+          onClick={() => setProcurementTab('RICE')}
+          className={`py-3.5 px-2 rounded-xl font-display font-black text-[10px] sm:text-xs uppercase tracking-wider transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 border focus-visible:ring-2 focus-visible:ring-[#F5A623] focus-visible:outline-none min-h-[44px] relative z-10 ${
+            procurementTab === 'RICE'
+              ? 'bg-[#F5A623] text-black border-[#F5A623] shadow-md scale-[1.02]'
+              : 'bg-transparent text-neutral-400 border-transparent hover:text-white'
+          }`}
+        >
+          <Package className="w-4 h-4 shrink-0" />
+          <span className="truncate">Rice</span>
+        </button>
+
+        <button
+          type="button"
           onClick={() => setProcurementTab('PACKAGING')}
-          className={`py-3.5 px-2 rounded-xl font-display font-black text-xs uppercase tracking-wider transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 border focus-visible:ring-2 focus-visible:ring-[#F5A623] focus-visible:outline-none min-h-[44px] relative z-10 ${
+          className={`py-3.5 px-2 rounded-xl font-display font-black text-[10px] sm:text-xs uppercase tracking-wider transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 border focus-visible:ring-2 focus-visible:ring-[#F5A623] focus-visible:outline-none min-h-[44px] relative z-10 ${
             procurementTab === 'PACKAGING'
               ? 'bg-[#F5A623] text-black border-[#F5A623] shadow-md scale-[1.02]'
               : 'bg-transparent text-neutral-400 border-transparent hover:text-white'
@@ -381,19 +494,6 @@ export default function WeighbridgeForm({
         >
           <Tags className="w-4 h-4 shrink-0" />
           <span className="truncate">Packaging</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setProcurementTab('FORECAST')}
-          className={`py-3.5 px-2 rounded-xl font-display font-black text-xs uppercase tracking-wider transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 border focus-visible:ring-2 focus-visible:ring-[#F5A623] focus-visible:outline-none min-h-[44px] relative z-10 ${
-            procurementTab === 'FORECAST'
-              ? 'bg-[#F5A623] text-black border-[#F5A623] shadow-md scale-[1.02]'
-              : 'bg-transparent text-neutral-400 border-transparent hover:text-white'
-          }`}
-        >
-          <TrendingUp className="w-4 h-4 shrink-0" />
-          <span className="truncate">Forecast</span>
         </button>
       </nav>
 
@@ -404,8 +504,36 @@ export default function WeighbridgeForm({
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="flex flex-col lg:flex-row gap-8"
+            className="flex flex-col gap-6"
           >
+            {/* FORECAST CARD */}
+            <div 
+              className="bg-[#111111] border border-neutral-800 rounded-2xl p-4 flex items-center cursor-pointer hover:bg-neutral-900 transition-colors shadow-brutal-sm w-full"
+              onClick={() => setShowForecast(!showForecast)}
+            >
+              <div className="w-14 h-14 rounded-2xl bg-[#F5A623]/10 flex items-center justify-center mr-5 shrink-0">
+                <Users className="w-7 h-7 text-[#F5A623]" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-[#F5A623] font-bold text-lg mb-0.5">Predictive Lead Forecast</h3>
+                <p className="text-neutral-400 text-sm leading-tight">Smart predictions for upcoming paddy arrivals based on historical patterns</p>
+              </div>
+            </div>
+            
+            <AnimatePresence>
+              {showForecast && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden"
+                >
+                  <SmartForecastView leads={predictiveLeads || []} availableVarieties={availableVarieties || []} />
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <div className="flex flex-col lg:flex-row gap-8">
             
             {/* LEFT: Pending Drafts Queue */}
             <div className="lg:w-1/3 flex flex-col gap-4">
@@ -835,6 +963,204 @@ export default function WeighbridgeForm({
                 </form>
               </div>
             </div>
+            </div>
+          </motion.div>
+        ) : procurementTab === 'RICE' ? (
+          /* TAB: RICE PROCUREMENT FORM */
+          <motion.div 
+            key="rice"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="max-w-4xl mx-auto card-brutal p-0 overflow-hidden"
+          >
+            <div className="bg-[var(--charcoal)] p-6 sm:p-8 text-white border-b-2 border-[var(--border)]">
+              <h2 className="font-display font-black text-2xl flex items-center">
+                <Package className="h-7 w-7 mr-3 text-[#F5A623]" />
+                RICE PROCUREMENT
+              </h2>
+              <p className="mt-2 text-white/80 text-sm font-medium">
+                Log direct rice receipts from Rice Mill Owners. This creates a finalized batch instantly.
+              </p>
+            </div>
+
+            <div className="p-4 sm:p-8">
+              {errorMsg && (
+                <div className="mb-6 p-4 bg-red-50 border-2 border-red-500 shadow-brutal-sm text-red-700 font-bold font-display text-sm flex items-center uppercase rounded-xl">
+                  ⚠️ {errorMsg}
+                </div>
+              )}
+
+              <form className="space-y-8" onSubmit={handleRiceProcurementSubmit}>
+                
+                {/* Section 1: Entities */}
+                <div className={`space-y-4 border-b-2 border-[var(--border)] pb-8 ${mobileStep === 1 ? 'block' : 'hidden lg:block'}`}>
+                  <h3 className="font-display font-black text-lg uppercase tracking-widest text-[var(--charcoal)] flex items-center">
+                    <span className="w-6 h-6 rounded-full bg-[var(--charcoal)] text-white flex items-center justify-center text-xs mr-2">1</span>
+                    Supplier & Godown
+                  </h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="flex gap-2 items-end">
+                      <Select
+                        label="Rice Mill Owner *"
+                        required
+                        value={riceSupplierId}
+                        onChange={(e) => setRiceSupplierId(e.target.value)}
+                      >
+                        <option value="">Select Mill Owner...</option>
+                        {riceMillOwners.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      </Select>
+                      <Button type="button" variant="ghost" onClick={() => { setModalEntity('RICE_MILL'); setModalOpen(true); }} className="px-3 mb-[2px]">
+                        <Plus className="w-5 h-5" />
+                      </Button>
+                    </div>
+
+                    <div className="flex gap-2 items-end">
+                      <Select
+                        label="Rice Product Variety *"
+                        required
+                        value={riceProductId}
+                        onChange={(e) => setRiceProductId(e.target.value)}
+                      >
+                        <option value="">Select Rice Variety...</option>
+                        {paddyProducts.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </Select>
+                      <Button type="button" variant="ghost" onClick={() => { setModalEntity('PRODUCT'); setModalOpen(true); }} className="px-3 mb-[2px]">
+                        <Plus className="w-5 h-5" />
+                      </Button>
+                    </div>
+
+                    <div className="flex gap-2 items-end md:col-span-2">
+                      <Select
+                        label="Rice Godown *"
+                        required
+                        value={riceGodownId}
+                        onChange={(e) => setRiceGodownId(e.target.value)}
+                      >
+                        <option value="">Select Godown...</option>
+                        {localGodowns.filter(g => g.type === 'RICE').map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                      </Select>
+                      <Button type="button" variant="ghost" onClick={() => { setModalEntity('GODOWN'); setModalOpen(true); }} className="px-3 mb-[2px]">
+                        <Plus className="w-5 h-5" />
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  <div className="lg:hidden flex gap-4 pt-4 mt-6">
+                    <Button type="button" onClick={() => setMobileStep(2)} variant="primary" className="flex-1">NEXT STEP</Button>
+                  </div>
+                </div>
+
+                {/* Section 2: Measurement */}
+                <div className={`space-y-4 border-b-2 border-[var(--border)] pb-8 ${mobileStep === 2 ? 'block' : 'hidden lg:block'}`}>
+                  <h3 className="font-display font-black text-lg uppercase tracking-widest text-[var(--charcoal)] flex items-center">
+                    <span className="w-6 h-6 rounded-full bg-[var(--charcoal)] text-white flex items-center justify-center text-xs mr-2">2</span>
+                    Measurement
+                  </h3>
+
+                  <div className="flex bg-[#1A1A1A] border border-[#333] p-1.5 rounded-xl w-full sm:w-fit mb-6 shadow-inner">
+                    <button
+                      type="button"
+                      onClick={() => setRiceMeasureMode('WEIGHBRIDGE')}
+                      className={`flex-1 px-4 py-3 sm:py-2 rounded-lg text-xs sm:text-sm font-black uppercase tracking-wider transition-all ${riceMeasureMode === 'WEIGHBRIDGE' ? 'bg-[#F5A623] text-black shadow-md scale-[1.02]' : 'text-neutral-400 hover:text-white'}`}
+                    >
+                      Weighbridge
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRiceMeasureMode('BAGS')}
+                      className={`flex-1 px-4 py-3 sm:py-2 rounded-lg text-xs sm:text-sm font-black uppercase tracking-wider transition-all ${riceMeasureMode === 'BAGS' ? 'bg-[#F5A623] text-black shadow-md scale-[1.02]' : 'text-neutral-400 hover:text-white'}`}
+                    >
+                      By Bags
+                    </button>
+                  </div>
+                  
+                  {riceMeasureMode === 'WEIGHBRIDGE' ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 bg-[#1A1A1A] p-4 sm:p-6 rounded-2xl border border-[#333]">
+                      <Input
+                        label="Gross Weight (kg) *"
+                        type="number"
+                        step="0.01"
+                        required
+                        value={riceGrossWeight}
+                        onChange={(e) => setRiceGrossWeight(e.target.value)}
+                      />
+                      <Input
+                        label="Tare Weight (kg) *"
+                        type="number"
+                        step="0.01"
+                        required
+                        value={riceTareWeight}
+                        onChange={(e) => setRiceTareWeight(e.target.value)}
+                      />
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 bg-[#1A1A1A] p-4 sm:p-6 rounded-2xl border border-[#333]">
+                      <Input
+                        label="Number of Bags *"
+                        type="number"
+                        step="0.01"
+                        required
+                        value={riceNumBags}
+                        onChange={(e) => setRiceNumBags(e.target.value)}
+                      />
+                      <Input
+                        label="Per Bag Weight (kg) *"
+                        type="number"
+                        step="0.01"
+                        required
+                        value={ricePerBagWeight}
+                        onChange={(e) => setRicePerBagWeight(e.target.value)}
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center p-5 bg-[#111111] rounded-2xl border border-neutral-800 text-white mt-4 shadow-brutal-sm">
+                    <span className="font-display font-black text-neutral-400 uppercase tracking-widest text-xs mb-1 sm:mb-0">Calculated Net Weight:</span>
+                    <span className="font-black text-3xl text-[#F5A623] tabular-nums leading-none">{riceNetWeight} <span className="text-sm font-bold text-neutral-500">kg</span></span>
+                  </div>
+                  
+                  <div className="lg:hidden flex gap-4 pt-4 mt-6">
+                    <Button type="button" onClick={() => setMobileStep(1)} variant="ghost" className="flex-1">BACK</Button>
+                    <Button type="button" onClick={() => setMobileStep(3)} variant="primary" className="flex-1">NEXT STEP</Button>
+                  </div>
+                </div>
+
+                {/* Section 3: Financials */}
+                <div className={`space-y-4 ${mobileStep === 3 ? 'block' : 'hidden lg:block'}`}>
+                  <h3 className="font-display font-black text-lg uppercase tracking-widest text-[var(--charcoal)] flex items-center">
+                    <span className="w-6 h-6 rounded-full bg-[var(--charcoal)] text-white flex items-center justify-center text-xs mr-2">3</span>
+                    Financials
+                  </h3>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <Input
+                      label={riceMeasureMode === 'WEIGHBRIDGE' ? "Rate per Quintal (₹) *" : "Rate per Bag (₹) *"}
+                      type="number"
+                      step="0.01"
+                      required
+                      value={riceRate}
+                      onChange={(e) => setRiceRate(e.target.value)}
+                    />
+                    
+                    <div className="flex flex-col justify-end">
+                      <div className="flex flex-col sm:flex-row sm:justify-between items-start sm:items-center p-5 bg-[#F5A623]/10 border border-[#F5A623]/30 rounded-2xl h-[72px]">
+                        <span className="font-display font-black text-xs uppercase tracking-widest text-[#F5A623] mb-0.5 sm:mb-0">Total Payable:</span>
+                        <span className="font-black text-2xl text-[#F5A623] tabular-nums leading-none">₹{Number(riceTotalPayable).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className={`pt-6 border-t-2 border-[var(--border)] flex flex-col sm:flex-row justify-end gap-4 ${mobileStep === 3 ? 'flex' : 'hidden lg:flex'}`}>
+                  <Button type="button" onClick={() => setMobileStep(2)} variant="ghost" className="lg:hidden flex-1 py-3 text-lg">BACK</Button>
+                  <Button type="submit" variant="primary" disabled={isRiceSubmitting} className="w-full sm:w-auto py-3 px-8 text-lg flex-1 sm:flex-none">
+                    {isRiceSubmitting ? 'SAVING...' : 'FINALIZE ENTRY'}
+                  </Button>
+                </div>
+              </form>
+            </div>
           </motion.div>
         ) : procurementTab === 'PACKAGING' ? (
           /* TAB 2: PACKAGING MATERIAL & BAG INBOUND PROCUREMENT FORM */
@@ -945,7 +1271,7 @@ export default function WeighbridgeForm({
                     >
                       <option value="">Select Godown...</option>
                       {localGodowns
-                        .filter(g => g.type === 'PACKAGING' || g.type === 'OTHER')
+                        .filter(g => g.type === 'PACKAGING')
                         .map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
                     </Select>
                     <Button type="button" variant="ghost" onClick={() => { setModalEntity('GODOWN'); setModalOpen(true); }} className="px-3 mb-[2px]">
@@ -977,17 +1303,7 @@ export default function WeighbridgeForm({
               </form>
             </div>
           </motion.div>
-        ) : (
-          /* TAB 3: SMART FORECAST — PREDICTIVE SOURCING CRM */
-          <motion.div
-            key="forecast"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-          >
-            <SmartForecastView leads={predictiveLeads || []} availableVarieties={availableVarieties || []} />
-          </motion.div>
-        )}
+        ) : null}
       </AnimatePresence>
 
       <Modal 
@@ -1009,7 +1325,8 @@ export default function WeighbridgeForm({
         onSuccess={handleAddSuccess}
         extraContext={{ 
           brokerId: supplierId,
-          lockedCategory: procurementTab === 'PACKAGING' ? 'PACKAGING_MATERIAL' : (procurementTab === 'PADDY' ? 'RAW_MATERIAL' : undefined)
+          lockedCategory: procurementTab === 'PACKAGING' ? 'PACKAGING_MATERIAL' : (procurementTab === 'PADDY' ? 'RAW_MATERIAL' : undefined),
+          lockedGodownType: procurementTab === 'PACKAGING' ? 'PACKAGING' : 'PADDY'
         }}
       />
     </div>

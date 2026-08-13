@@ -16,6 +16,7 @@ export class PackingItemRepository {
         brandName: data.brandName,
         capacityKg: data.capacityKg,
         quantityBags: data.quantityBags,
+        initialQuantityBags: data.quantityBags,
         perBagRate: data.perBagRate,
         godownId: data.godownId,
         supplierId: data.supplierId || null,
@@ -26,7 +27,12 @@ export class PackingItemRepository {
   }
 
   static async list(options?: { status?: string }) {
-    return prisma.packingItem.findMany({ take: 1000, where: options?.status ? { status: options.status } : undefined,
+    return prisma.packingItem.findMany({ 
+      take: 1000, 
+      where: {
+        quantityBags: { gt: 0 },
+        ...(options?.status ? { status: options.status } : {})
+      },
       include: {
         godown: true,
         supplier: true,
@@ -44,10 +50,15 @@ export class PackingItemRepository {
     supplierId?: string | null;
     hsnCode?: string | null;
     status?: string;
+    deletedAt?: Date | null;
   }) {
+    const isZeroQty = data.quantityBags !== undefined && data.quantityBags <= 0;
     return prisma.packingItem.update({
       where: { id },
-      data,
+      data: {
+        ...data,
+        ...(isZeroQty ? { quantityBags: 0, deletedAt: new Date() } : {})
+      },
     });
   }
 

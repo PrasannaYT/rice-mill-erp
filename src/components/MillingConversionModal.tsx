@@ -149,19 +149,21 @@ export default function MillingConversionModal({
   };
 
   const removeOutputRow = (id: string) => {
-    if (outputRows.length === 1) {
-      toast.error('At least one output row is required.');
-      return;
-    }
-    setOutputRows(outputRows.filter(r => r.id !== id));
+    setOutputRows(prev => {
+      if (prev.length === 1) {
+        toast.error('At least one output row is required.');
+        return prev;
+      }
+      return prev.filter(r => r.id !== id);
+    });
   };
 
   const updateOutputRow = (id: string, field: keyof MilledOutputRow, value: string) => {
-    setOutputRows(outputRows.map(r => r.id === id ? { ...r, [field]: value } : r));
+    setOutputRows(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
   };
 
   const adjustBagsForRow = (id: string, delta: number) => {
-    setOutputRows(outputRows.map(r => {
+    setOutputRows(prev => prev.map(r => {
       if (r.id !== id) return r;
       const current = parseFloat(r.numberOfBags) || 0;
       const updated = Math.max(0, current + delta);
@@ -239,7 +241,7 @@ export default function MillingConversionModal({
         const labelStr = simplifiedRows.map(r => `${r.numberOfBags}x${r.bagCapacityKg}kg ${r.outputType}`).join(' + ');
 
         const stored = localStorage.getItem('milling_quick_templates');
-        let templates: SavedTemplate[] = stored ? JSON.parse(stored) : [];
+        const templates: SavedTemplate[] = stored ? JSON.parse(stored) : [];
         
         const existingIdx = templates.findIndex(t => {
           if (t.rows.length !== simplifiedRows.length) return false;
@@ -426,6 +428,9 @@ export default function MillingConversionModal({
                           ))
                         )}
                       </select>
+                      <p className="text-[10px] text-neutral-500 mt-2 font-medium leading-relaxed border-l-2 border-[#F5A623]/50 pl-2">
+                        <span className="text-[#F5A623] font-bold">NOTE:</span> The selected variety only applies to Fine Rice and Raw Rice. Other by-products (Broken Rice, Bran, etc.) are mixed generically in the Rice Godown.
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -513,7 +518,13 @@ export default function MillingConversionModal({
                             </label>
                             <select
                               value={row.outputType}
-                              onChange={e => updateOutputRow(row.id, 'outputType', e.target.value)}
+                              onChange={e => {
+                                const newType = e.target.value;
+                                updateOutputRow(row.id, 'outputType', newType);
+                                if (['Broken Rice', 'Black Rice', 'Mixed Rice', 'Bran', 'Husk'].includes(newType)) {
+                                  updateOutputRow(row.id, 'bagCapacityKg', '1');
+                                }
+                              }}
                               className="w-full bg-[#121212] border border-[#F5A623]/30 rounded-xl p-3 text-xs font-bold text-white focus:outline-none focus:border-[#F5A623] min-h-[44px]"
                             >
                               {OUTPUT_TYPES.map(t => (
@@ -522,85 +533,103 @@ export default function MillingConversionModal({
                             </select>
                           </div>
 
-                          {/* 2. Bag Capacity (KG) */}
-                          <div>
-                            <div className="flex justify-between items-center mb-1">
-                              <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">
-                                Bag Weight (KG) *
+                          {['Broken Rice', 'Black Rice', 'Mixed Rice', 'Bran', 'Husk'].includes(row.outputType) ? (
+                            <div>
+                              <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 block mb-1">
+                                Total Weight (KG) *
                               </label>
+                              <input
+                                type="number"
+                                step="0.1"
+                                placeholder="0"
+                                value={row.numberOfBags}
+                                onChange={e => updateOutputRow(row.id, 'numberOfBags', e.target.value)}
+                                className="w-full bg-[#121212] border border-[#F5A623]/40 rounded-xl p-3 font-mono font-black text-base text-white focus:outline-none focus:border-[#F5A623] min-h-[44px]"
+                              />
+                            </div>
+                          ) : (
+                            <div>
+                              {/* 2. Bag Capacity (KG) */}
+                              <div className="flex justify-between items-center mb-1">
+                                <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">
+                                  Bag Weight (KG) *
+                                </label>
+                                <div className="flex gap-1">
+                                  {CAPACITY_PRESETS.map(preset => (
+                                    <button
+                                      key={preset}
+                                      type="button"
+                                      onClick={() => updateOutputRow(row.id, 'bagCapacityKg', preset)}
+                                      className={`text-[9px] font-mono px-1.5 py-0.5 rounded border transition-colors ${
+                                        row.bagCapacityKg === preset 
+                                          ? 'bg-[#F5A623] text-black font-black border-[#F5A623]' 
+                                          : 'bg-neutral-800 text-neutral-300 border-neutral-700'
+                                      }`}
+                                    >
+                                      {preset}k
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                              <input
+                                type="number"
+                                step="0.1"
+                                value={row.bagCapacityKg}
+                                onChange={e => updateOutputRow(row.id, 'bagCapacityKg', e.target.value)}
+                                className="w-full bg-[#121212] border border-[#F5A623]/30 rounded-xl p-3 font-mono text-xs text-white focus:outline-none focus:border-[#F5A623] min-h-[44px]"
+                              />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 3. QUICK INCREMENT CHIPS & NO OF BAGS */}
+                        {!['Broken Rice', 'Black Rice', 'Mixed Rice', 'Bran', 'Husk'].includes(row.outputType) && (
+                          <div>
+                            <div className="flex justify-between items-center mb-1.5">
+                              <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">
+                                No. of Bags *
+                              </label>
+                              {/* 1-TAP QUICK BAG INCREMENT CHIPS */}
                               <div className="flex gap-1">
-                                {CAPACITY_PRESETS.map(preset => (
+                                {[10, 50, 100].map(inc => (
                                   <button
-                                    key={preset}
+                                    key={inc}
                                     type="button"
-                                    onClick={() => updateOutputRow(row.id, 'bagCapacityKg', preset)}
-                                    className={`text-[9px] font-mono px-1.5 py-0.5 rounded border transition-colors ${
-                                      row.bagCapacityKg === preset 
-                                        ? 'bg-[#F5A623] text-black font-black border-[#F5A623]' 
-                                        : 'bg-neutral-800 text-neutral-300 border-neutral-700'
-                                    }`}
+                                    onClick={() => adjustBagsForRow(row.id, inc)}
+                                    className="text-[9px] font-mono px-2 py-0.5 bg-[#F5A623]/15 text-[#F5A623] border border-[#F5A623]/30 rounded-lg hover:bg-[#F5A623] hover:text-black font-bold transition-all"
                                   >
-                                    {preset}k
+                                    +{inc}
                                   </button>
                                 ))}
                               </div>
                             </div>
-                            <input
-                              type="number"
-                              step="0.1"
-                              value={row.bagCapacityKg}
-                              onChange={e => updateOutputRow(row.id, 'bagCapacityKg', e.target.value)}
-                              className="w-full bg-[#121212] border border-[#F5A623]/30 rounded-xl p-3 font-mono text-xs text-white focus:outline-none focus:border-[#F5A623] min-h-[44px]"
-                            />
-                          </div>
-                        </div>
 
-                        {/* 3. QUICK INCREMENT CHIPS & NO OF BAGS */}
-                        <div>
-                          <div className="flex justify-between items-center mb-1.5">
-                            <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">
-                              No. of Bags *
-                            </label>
-                            {/* 1-TAP QUICK BAG INCREMENT CHIPS */}
-                            <div className="flex gap-1">
-                              {[10, 50, 100].map(inc => (
-                                <button
-                                  key={inc}
-                                  type="button"
-                                  onClick={() => adjustBagsForRow(row.id, inc)}
-                                  className="text-[9px] font-mono px-2 py-0.5 bg-[#F5A623]/15 text-[#F5A623] border border-[#F5A623]/30 rounded-lg hover:bg-[#F5A623] hover:text-black font-bold transition-all"
-                                >
-                                  +{inc}
-                                </button>
-                              ))}
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => adjustBagsForRow(row.id, -10)}
+                                className="w-10 h-[46px] bg-neutral-800 text-white font-black rounded-l-xl border border-neutral-700 active:bg-neutral-700 flex items-center justify-center shrink-0 text-base"
+                              >
+                                -
+                              </button>
+                              <input
+                                type="number"
+                                step="1"
+                                placeholder="0"
+                                value={row.numberOfBags}
+                                onChange={e => updateOutputRow(row.id, 'numberOfBags', e.target.value)}
+                                className="w-full bg-[#121212] border border-[#F5A623]/40 p-2.5 text-center font-mono font-black text-base text-white focus:outline-none focus:border-[#F5A623] min-h-[46px]"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => adjustBagsForRow(row.id, 10)}
+                                className="w-10 h-[46px] bg-neutral-800 text-white font-black rounded-r-xl border border-neutral-700 active:bg-neutral-700 flex items-center justify-center shrink-0 text-base"
+                              >
+                                +
+                              </button>
                             </div>
                           </div>
-
-                          <div className="flex items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => adjustBagsForRow(row.id, -10)}
-                              className="w-10 h-[46px] bg-neutral-800 text-white font-black rounded-l-xl border border-neutral-700 active:bg-neutral-700 flex items-center justify-center shrink-0 text-base"
-                            >
-                              -
-                            </button>
-                            <input
-                              type="number"
-                              step="1"
-                              placeholder="0"
-                              value={row.numberOfBags}
-                              onChange={e => updateOutputRow(row.id, 'numberOfBags', e.target.value)}
-                              className="w-full bg-[#121212] border border-[#F5A623]/40 p-2.5 text-center font-mono font-black text-base text-white focus:outline-none focus:border-[#F5A623] min-h-[46px]"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => adjustBagsForRow(row.id, 10)}
-                              className="w-10 h-[46px] bg-neutral-800 text-white font-black rounded-r-xl border border-neutral-700 active:bg-neutral-700 flex items-center justify-center shrink-0 text-base"
-                            >
-                              +
-                            </button>
-                          </div>
-                        </div>
+                        )}
 
                         {/* Yield Subtotal Badge */}
                         <div className="flex justify-between items-center p-2.5 bg-black/60 rounded-xl border border-neutral-800">

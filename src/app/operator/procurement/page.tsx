@@ -15,7 +15,9 @@ export const metadata = {
 
 export default async function WeighbridgePage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const params = await searchParams;
-  const initialTab = params?.tab === 'packaging' ? 'PACKAGING' : 'PADDY';
+  const tabParam = params?.tab?.toLowerCase();
+  const initialTab = tabParam === 'packaging' ? 'PACKAGING' : 
+                     tabParam === 'rice' ? 'RICE' : 'PADDY';
   
   const session = await getServerSession(authOptions);
 
@@ -37,18 +39,6 @@ export default async function WeighbridgePage({ searchParams }: { searchParams: 
     .map(p => ({ id: p.id, name: p.name, category: p.category }));
   
   const allGodowns = await GodownRepository.list();
-
-  // Ensure a Common Packaging Storage Godown exists for bag inventory
-  let commonGodown = allGodowns.find(g => g.name.toLowerCase().includes('common') || g.name.toLowerCase().includes('packaging'));
-  if (!commonGodown) {
-    commonGodown = await prisma.godown.create({
-      data: {
-        name: "Common Packaging Storage",
-        location: "Central Storage Hub"
-      }
-    });
-    allGodowns.push(commonGodown);
-  }
 
   const safeGodowns = allGodowns.map(g => ({ id: g.id, name: g.name, type: (g as any).type || 'PADDY' }));
 

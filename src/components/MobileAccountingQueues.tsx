@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Landmark, ArrowDownCircle, ArrowUpCircle, Truck, Package, UserCheck, Phone, FileText, Wallet, CheckCircle2, Clock, Tags, RefreshCw, X } from 'lucide-react';
-import { recordTransactionAction, confirmProcurementPaymentAction, confirmSalesReceiptAction, confirmPackingItemPaymentAction, confirmSalesRefundAction } from '@/app/actions/accounting';
+import { recordTransactionAction, confirmProcurementPaymentAction, confirmSalesReceiptAction, confirmPackingItemPaymentAction } from '@/app/actions/accounting';
 import { Input, Select } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -14,6 +14,34 @@ type Customer = { id: string; name: string; contact?: string | null; gstin?: str
 type Supplier = { id: string; name: string; contact?: string | null; gstin?: string | null; balance: number | string | { toString(): string } };
 type ExpenseCategory = { id: string; name: string };
 type Bank = { id: string; bankName: string; accountNumber: string; balance: number | string | { toString(): string } };
+
+export function isProcurementRiceBatch(batch: any): boolean {
+  if (!batch) return false;
+
+  // 1. Explicit Paddy signals (Farmer attached, moisture metrics, broker commission)
+  if (batch.farmerId || (batch.farmer && batch.farmer.id)) return false;
+  if (batch.beforeDryingMoisture != null || batch.dryingShortage != null) return false;
+  if (batch.brokerCommissionRate != null || (batch.brokerCommissionTotal != null && Number(batch.brokerCommissionTotal) > 0)) return false;
+
+  const cat = (batch.product?.category || '').toUpperCase();
+  if (cat === 'RAW_MATERIAL' || cat === 'PADDY') return false;
+
+  // 2. Explicit Rice signals
+  const suppCat = (batch.supplier?.category || '').toUpperCase();
+  if (suppCat === 'RICE_MILL' || suppCat === 'RICE_SUPPLIER' || suppCat === 'RICE_VENDOR') return true;
+  if (cat.includes('FINISHED') || cat.includes('RICE')) return true;
+
+  const pName = (batch.product?.name || '').toUpperCase();
+  if (pName.includes('RICE')) return true;
+
+  const gType = (batch.godown?.type || '').toUpperCase();
+  if (gType === 'RICE') return true;
+
+  // 3. Direct Rice Procurement signature: Supplier batch without farmer or paddy broker tag
+  if (suppCat !== 'PADDY_BROKER' && !batch.farmerId) return true;
+
+  return false;
+}
 
 export type PaymentHistory = { id: string; amount: string; date: string };
 
@@ -45,6 +73,7 @@ export type PendingPackingItem = {
   payments?: PaymentHistory[];
   capacityKg: string | number;
   quantityBags: string | number;
+  initialQuantityBags?: string | number;
   perBagRate: string | number;
   createdAt: string;
   godown: { id: string; name: string };
@@ -96,12 +125,19 @@ export default function MobileAccountingQueues({
 
   // --- STATES FOR MOBILE UX ---
   const router = useRouter();
-  const [activePayment, setActivePayment] = useState<{ id: string; type: 'PADDY' | 'PACKING' | 'SALES' | 'SALES_REFUND'; maxAmount: number; title: string } | null>(null);
+  const [activePayment, setActivePayment] = useState<{ id: string; type: 'PADDY' | 'PACKING' | 'SALES'; maxAmount: number; title: string } | null>(null);
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
-  const [queueFilter, setQueueFilter] = useState<'ALL' | 'PADDY' | 'PACKING' | 'SALES'>('ALL');
+  const [queueFilter, setQueueFilter] = useState<'ALL' | 'PADDY' | 'RICE' | 'PACKING' | 'SALES'>('ALL');
   const [isSyncing, setIsSyncing] = useState(false);
 
-  const filteredProcurements = pendingProcurements.filter(p => !skippedIds.includes(p.id) && (queueFilter === 'ALL' || queueFilter === 'PADDY'));
+  const filteredProcurements = pendingProcurements.filter(p => {
+    if (skippedIds.includes(p.id)) return false;
+    if (queueFilter === 'ALL') return true;
+    const isRice = isProcurementRiceBatch(p);
+    if (queueFilter === 'RICE') return isRice;
+    if (queueFilter === 'PADDY') return !isRice;
+    return false;
+  });
   const filteredPackingItems = pendingPackingItems.filter(p => !skippedIds.includes(p.id) && (queueFilter === 'ALL' || queueFilter === 'PACKING'));
   const filteredSales = pendingSales.filter(p => !skippedIds.includes(p.id) && (queueFilter === 'ALL' || queueFilter === 'SALES'));
 
@@ -127,7 +163,7 @@ export default function MobileAccountingQueues({
             </button>
           </div>
           <div className="flex overflow-x-auto hide-scrollbar gap-2 pb-1">
-            {['ALL', 'PADDY', 'SALES', 'PACKING'].map(pill => (
+            {['ALL', 'PADDY', 'RICE', 'SALES', 'PACKING'].map(pill => (
               <button 
                 key={pill}
                 onClick={() => setQueueFilter(pill as any)}
@@ -136,7 +172,8 @@ export default function MobileAccountingQueues({
                 {pill} 
                   <span className="ml-1.5 opacity-80">
                     {pill === 'ALL' && `(${pendingProcurements.filter(p => !skippedIds.includes(p.id)).length + pendingPackingItems.filter(p => !skippedIds.includes(p.id)).length + pendingSales.filter(p => !skippedIds.includes(p.id)).length})`}
-                    {pill === 'PADDY' && `(${pendingProcurements.filter(p => !skippedIds.includes(p.id)).length})`}
+                    {pill === 'PADDY' && `(${pendingProcurements.filter(p => !skippedIds.includes(p.id) && !isProcurementRiceBatch(p)).length})`}
+                    {pill === 'RICE' && `(${pendingProcurements.filter(p => !skippedIds.includes(p.id) && isProcurementRiceBatch(p)).length})`}
                     {pill === 'PACKING' && `(${pendingPackingItems.filter(p => !skippedIds.includes(p.id)).length})`}
                     {pill === 'SALES' && `(${pendingSales.filter(p => !skippedIds.includes(p.id)).length})`}
                   </span>
@@ -190,9 +227,14 @@ export default function MobileAccountingQueues({
                             <div className="flex items-start justify-between gap-3">
                               <div>
                                 <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                                  <span className="font-display font-black text-[10px] bg-[var(--rust)] text-white px-2.5 py-0.5 rounded border border-[var(--ink)] uppercase tracking-wider flex items-center">
-                                    <Truck className="w-3 h-3 mr-1" /> PADDY
-                                  </span>
+                                  {(() => {
+                                    const isRice = isProcurementRiceBatch(batch);
+                                    return (
+                                      <span className={`font-display font-black text-[10px] ${isRice ? 'bg-sky-600 border-sky-400' : 'bg-[var(--rust)] border-[var(--ink)]'} text-white px-2.5 py-0.5 rounded border uppercase tracking-wider flex items-center`}>
+                                        <Truck className="w-3 h-3 mr-1" /> {isRice ? 'RICE' : 'PADDY'}
+                                      </span>
+                                    );
+                                  })()}
                                   <span className="text-[11px] font-bold text-[var(--muted)] font-mono">
                                     {new Date(batch.createdAt).toLocaleDateString("en-IN", { month: 'short', day: 'numeric', year: 'numeric' })}
                                   </span>
@@ -231,12 +273,15 @@ export default function MobileAccountingQueues({
                             {/* Action Controls */}
                             <div className="flex items-center gap-3 pt-2">
                               <Button
-                                onClick={() => setActivePayment({
-                                  id: batch.id,
-                                  type: 'PADDY',
-                                  maxAmount: remaining,
-                                  title: `Paddy Payment – ${batch.farmer?.name || batch.supplier.name}`
-                                })}
+                                onClick={() => {
+                                  const isRice = isProcurementRiceBatch(batch);
+                                  setActivePayment({
+                                    id: batch.id,
+                                    type: 'PADDY',
+                                    maxAmount: remaining,
+                                    title: `${isRice ? 'Rice' : 'Paddy'} Payment – ${batch.farmer?.name || batch.supplier.name}`
+                                  });
+                                }}
                                 className="flex-1 bg-[var(--red)] hover:bg-[#8B2E06] text-white py-3 font-black text-sm shadow-sm min-h-[46px]"
                               >
                                 RECORD PAYMENT
@@ -306,7 +351,7 @@ export default function MobileAccountingQueues({
 
                     {/* 2. Packaging Material & Bag Procurements */}
                     {filteredPackingItems.map((pkg, idx) => {
-                      const bags = Number(pkg.quantityBags);
+                      const bags = Number(pkg.initialQuantityBags || pkg.quantityBags);
                       const rate = Number(pkg.perBagRate);
                       const totalPayable = bags * rate;
                       const amountPaid = Number(pkg.amountPaid || 0);
@@ -439,10 +484,8 @@ export default function MobileAccountingQueues({
                     {filteredSales.map((invoice, idx) => {
                       const grandTotal = Number(invoice.grandTotal);
                       const amountPaid = Number(invoice.amountPaid || 0);
-                      const actualRemaining = grandTotal - amountPaid;
-                      const isRefund = actualRemaining < 0;
-                      const remaining = Math.abs(actualRemaining);
-                      const percentPaid = grandTotal > 0 ? Math.min(100, Math.max(0, Math.round((amountPaid / grandTotal) * 100))) : 0;
+                      const remaining = Math.max(0, grandTotal - amountPaid);
+                      const percentPaid = grandTotal > 0 ? Math.min(100, Math.round((amountPaid / grandTotal) * 100)) : 0;
                       const isExpanded = expandedCardId === invoice.id;
 
                       return (
@@ -474,8 +517,8 @@ export default function MobileAccountingQueues({
                               </div>
 
                               <div className="text-right shrink-0">
-                                <span className="text-[10px] uppercase font-black tracking-widest text-[var(--muted)] block">{isRefund ? 'Refund Pending' : 'Remaining'}</span>
-                                <span className={`font-display font-black text-xl tabular-nums block ${isRefund ? 'text-[var(--gold)]' : 'text-[var(--green)]'}`}>
+                                <span className="text-[10px] uppercase font-black tracking-widest text-[var(--muted)] block">Remaining</span>
+                                <span className="font-display font-black text-xl text-[var(--green)] tabular-nums block">
                                   ₹{remaining.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                 </span>
                                 <span className="text-[11px] text-[var(--muted)] font-bold block mt-0.5">
@@ -488,7 +531,7 @@ export default function MobileAccountingQueues({
                             <div className="space-y-1">
                               <div className="flex justify-between text-[10px] font-black uppercase text-[var(--muted)]">
                                 <span>Received: ₹{amountPaid.toLocaleString('en-IN')} ({percentPaid}%)</span>
-                                <span>{isRefund ? 'Due Refund' : 'Due'}: ₹{remaining.toLocaleString('en-IN')}</span>
+                                <span>Due: ₹{remaining.toLocaleString('en-IN')}</span>
                               </div>
                               <div className="w-full h-2.5 bg-[var(--surface-2)] border border-[var(--border)] rounded-full overflow-hidden flex">
                                 <div style={{ width: `${percentPaid}%` }} className="bg-[var(--green)] h-full transition-all duration-300" />
@@ -501,13 +544,13 @@ export default function MobileAccountingQueues({
                               <Button
                                 onClick={() => setActivePayment({
                                   id: invoice.id,
-                                  type: isRefund ? 'SALES_REFUND' : 'SALES',
+                                  type: 'SALES',
                                   maxAmount: remaining,
-                                  title: isRefund ? `Issue Refund – ${invoice.customer.name}` : `Sales Receipt – ${invoice.customer.name}`
+                                  title: `Sales Receipt – ${invoice.customer.name}`
                                 })}
-                                className={`flex-1 text-[var(--text)] py-3 font-black text-sm shadow-sm min-h-[46px] ${isRefund ? 'bg-[var(--gold)] hover:bg-[#B38B22]' : 'bg-[var(--green)] hover:bg-[var(--green-light)]'}`}
+                                className="flex-1 bg-[var(--green)] hover:bg-[var(--green-light)] text-[var(--text)] py-3 font-black text-sm shadow-sm min-h-[46px]"
                               >
-                                {isRefund ? 'ISSUE REFUND / CREDIT' : 'RECORD RECEIPT'}
+                                RECORD RECEIPT
                               </Button>
 
                               <button
@@ -590,7 +633,7 @@ export default function MobileAccountingQueues({
             >
               <div className="flex justify-between items-center mb-6 border-b-2 border-dashed border-[var(--dust)] pb-4">
                 <h2 className="font-black text-xl uppercase tracking-tight flex items-center text-[var(--text)]">
-                  Record {activePayment.type === 'SALES' ? 'Receipt' : (activePayment.type === 'SALES_REFUND' ? 'Refund' : 'Payment')}
+                  Record {activePayment.type === 'SALES' ? 'Receipt' : 'Payment'}
                 </h2>
                 <button onClick={() => setActivePayment(null)} className="p-2 bg-[var(--surface-2)] rounded-full text-[var(--muted)]">
                   <X className="w-5 h-5" />
@@ -601,8 +644,8 @@ export default function MobileAccountingQueues({
                 <span className="font-bold text-xs uppercase tracking-widest text-[var(--muted)] block mb-1">Target</span>
                 <span className="font-black text-lg block">{activePayment.title}</span>
                 <div className="flex justify-between items-center mt-2 pt-2 border-t border-[var(--dust)]">
-                  <span className="font-bold text-xs uppercase text-[var(--muted)]">{activePayment.type === 'SALES_REFUND' ? 'Refund Amount' : 'Pending Balance'}</span>
-                  <span className={`font-black text-lg ${activePayment.type === 'SALES' ? 'text-[var(--green)]' : (activePayment.type === 'SALES_REFUND' ? 'text-[var(--gold)]' : 'text-[var(--red)]')}`}>
+                  <span className="font-bold text-xs uppercase text-[var(--muted)]">Pending Balance</span>
+                  <span className={`font-black text-lg ${activePayment.type === 'SALES' ? 'text-[var(--green)]' : 'text-[var(--red)]'}`}>
                     ₹{activePayment.maxAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
@@ -620,11 +663,8 @@ export default function MobileAccountingQueues({
                   } else if (activePayment.type === 'SALES') {
                     formData.append('invoiceId', activePayment.id);
                     await confirmSalesReceiptAction(formData);
-                  } else if (activePayment.type === 'SALES_REFUND') {
-                    formData.append('invoiceId', activePayment.id);
-                    await confirmSalesRefundAction(formData);
                   }
-                  toast.success(`${activePayment.type === 'SALES' ? 'Receipt' : (activePayment.type === 'SALES_REFUND' ? 'Refund' : 'Payment')} Confirmed!`);
+                  toast.success(`${activePayment.type === 'SALES' ? 'Receipt' : 'Payment'} Confirmed!`);
                   setActivePayment(null);
                 } catch (err) {
                   toast.error('Error confirming: ' + (err instanceof Error ? err.message : String(err)));
@@ -633,9 +673,9 @@ export default function MobileAccountingQueues({
                 }
               }} className="space-y-4">
                 <Input 
-                  label={`Amount (${activePayment.type === 'SALES' ? 'Received' : (activePayment.type === 'SALES_REFUND' ? 'Refunded' : 'Paid')}) ₹ *`}
+                  label={`Amount (${activePayment.type === 'SALES' ? 'Received' : 'Paid'}) ₹ *`}
                   type="number" step="0.01" name="amount" required max={activePayment.maxAmount} placeholder="e.g. 0.00"
-                  className={`${activePayment.type === 'SALES' ? 'text-[var(--green)]' : (activePayment.type === 'SALES_REFUND' ? 'text-[var(--gold)]' : 'text-[var(--red)]')} font-black text-xl`} 
+                  className={`${activePayment.type === 'SALES' ? 'text-[var(--green)]' : 'text-[var(--red)]'} font-black text-xl`} 
                 />
                 <Select label="Payment Mode *" name="mode" required>
                   <option value="CASH">Cash</option>
@@ -654,9 +694,9 @@ export default function MobileAccountingQueues({
                     type="submit"
                     variant="primary"
                     disabled={submittingId === activePayment.id}
-                    className={`w-full min-h-[52px] py-4 text-base font-black shadow-brutal-sm ${activePayment.type === 'SALES' ? 'bg-[var(--green)] hover:bg-[var(--green-light)] text-[var(--text)]' : (activePayment.type === 'SALES_REFUND' ? 'bg-[var(--gold)] hover:bg-[#B38B22] text-[var(--text)]' : 'bg-[var(--red)] hover:bg-[#8B2E06] text-white')}`}
+                    className={`w-full min-h-[52px] py-4 text-base font-black shadow-brutal-sm ${activePayment.type === 'SALES' ? 'bg-[var(--green)] hover:bg-[var(--green-light)] text-[var(--text)]' : 'bg-[var(--red)] hover:bg-[#8B2E06] text-white'}`}
                   >
-                    {submittingId === activePayment.id ? 'PROCESSING...' : `CONFIRM ${activePayment.type === 'SALES' ? 'RECEIPT' : (activePayment.type === 'SALES_REFUND' ? 'REFUND' : 'PAYMENT')}`}
+                    {submittingId === activePayment.id ? 'PROCESSING...' : `CONFIRM ${activePayment.type === 'SALES' ? 'RECEIPT' : 'PAYMENT'}`}
                   </Button>
                 </div>
               </form>

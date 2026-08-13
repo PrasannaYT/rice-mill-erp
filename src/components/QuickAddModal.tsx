@@ -11,14 +11,14 @@ import {
   createVehicleAction
 } from '@/app/actions/masterData';
 
-export type EntityType = 'SUPPLIER' | 'BAG_VENDOR' | 'FARMER' | 'PRODUCT' | 'GODOWN' | 'CUSTOMER' | 'LEDGER' | 'VEHICLE';
+export type EntityType = 'SUPPLIER' | 'BAG_VENDOR' | 'RICE_MILL' | 'FARMER' | 'PRODUCT' | 'GODOWN' | 'CUSTOMER' | 'LEDGER' | 'VEHICLE';
 
 interface QuickAddModalProps {
   entityType: EntityType;
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (newItem: { id: string; name: string; brokerId?: string; licensePlate?: string; category?: string }) => void;
-  extraContext?: { brokerId?: string; lockedCategory?: string } & Record<string, unknown>;
+  onSuccess: (newItem: { id: string; name: string; brokerId?: string; licensePlate?: string; category?: string; type?: string }) => void;
+  extraContext?: { brokerId?: string; lockedCategory?: string; lockedGodownType?: string } & Record<string, unknown>;
 }
 
 export default function QuickAddModal({ entityType, isOpen, onClose, onSuccess, extraContext }: QuickAddModalProps) {
@@ -46,6 +46,10 @@ export default function QuickAddModal({ entityType, isOpen, onClose, onSuccess, 
           formData.append('category', 'BAG_VENDOR');
           newItem = await createSupplierAction(formData);
           break;
+        case 'RICE_MILL':
+          formData.append('category', 'RICE_MILL');
+          newItem = await createSupplierAction(formData);
+          break;
         case 'FARMER':
           if (extraContext?.brokerId) {
             formData.append('brokerId', extraContext.brokerId);
@@ -58,9 +62,12 @@ export default function QuickAddModal({ entityType, isOpen, onClose, onSuccess, 
           newItem = { ...createdProd, category: formDataObj.category as string };
           break;
         }
-        case 'GODOWN':
-          newItem = await createGodownAction(formData);
+        case 'GODOWN': {
+          const formDataObj = Object.fromEntries(formData.entries());
+          const createdGodown = await createGodownAction(formData);
+          newItem = { ...createdGodown, type: (formDataObj.type as string) || createdGodown.type || 'PACKAGING' };
           break;
+        }
         case 'CUSTOMER':
           newItem = await createCustomerAction(formData);
           break;
@@ -84,6 +91,7 @@ export default function QuickAddModal({ entityType, isOpen, onClose, onSuccess, 
   const titles: Record<EntityType, string> = {
     SUPPLIER: 'Add New Paddy Broker',
     BAG_VENDOR: 'Add New Bag Vendor / Packaging Supplier',
+    RICE_MILL: 'Add New Rice Mill Owner',
     FARMER: 'Add New Farmer',
     PRODUCT: 'Add New Product',
     GODOWN: 'Add New Godown',
@@ -141,14 +149,14 @@ export default function QuickAddModal({ entityType, isOpen, onClose, onSuccess, 
             </>
           )}
 
-          {(entityType === 'SUPPLIER' || entityType === 'BAG_VENDOR' || entityType === 'FARMER' || entityType === 'CUSTOMER') && (
+          {(entityType === 'SUPPLIER' || entityType === 'BAG_VENDOR' || entityType === 'FARMER' || entityType === 'CUSTOMER' || entityType === 'RICE_MILL') && (
             <div>
               <label className="label-brutal mb-1">Contact Number</label>
               <input type="text" name="contact" className="w-full p-2.5 bg-[var(--surface-2)]  border border-[var(--border)]  rounded-lg focus:ring-emerald-500 focus:border-emerald-500" placeholder="Optional" />
             </div>
           )}
 
-          {(entityType === 'SUPPLIER' || entityType === 'BAG_VENDOR' || entityType === 'CUSTOMER') && (
+          {(entityType === 'SUPPLIER' || entityType === 'BAG_VENDOR' || entityType === 'CUSTOMER' || entityType === 'RICE_MILL') && (
             <>
               <div>
                 <label className="label-brutal mb-1">GSTIN</label>
@@ -218,12 +226,21 @@ export default function QuickAddModal({ entityType, isOpen, onClose, onSuccess, 
           {entityType === 'GODOWN' && (
             <>
               <div>
+                <label className="label-brutal mb-1">Godown Type <span className="text-red-500">*</span></label>
+                <select name="type" required defaultValue={extraContext?.lockedGodownType || "PACKAGING"} className="w-full p-2.5 bg-[var(--surface-2)] border border-[var(--border)] rounded-lg focus:ring-emerald-500 focus:border-emerald-500">
+                  <option value="PACKAGING">Packaging Storage</option>
+                  <option value="PADDY">Paddy Storage</option>
+                  <option value="RICE">Finished Goods (Rice)</option>
+                  <option value="OTHER">Other Storage</option>
+                </select>
+              </div>
+              <div>
                 <label className="label-brutal mb-1">Location</label>
-                <input type="text" name="location" className="w-full p-2.5 bg-[var(--surface-2)]  border border-[var(--border)]  rounded-lg focus:ring-emerald-500 focus:border-emerald-500" placeholder="Optional" />
+                <input type="text" name="location" className="w-full p-2.5 bg-[var(--surface-2)] border border-[var(--border)] rounded-lg focus:ring-emerald-500 focus:border-emerald-500" placeholder="Optional" />
               </div>
               <div>
                 <label className="label-brutal mb-1">Capacity (KG)</label>
-                <input type="number" step="0.01" name="capacity" className="w-full p-2.5 bg-[var(--surface-2)]  border border-[var(--border)]  rounded-lg focus:ring-emerald-500 focus:border-emerald-500" placeholder="Optional" />
+                <input type="number" step="0.01" name="capacity" className="w-full p-2.5 bg-[var(--surface-2)] border border-[var(--border)] rounded-lg focus:ring-emerald-500 focus:border-emerald-500" placeholder="Optional" />
               </div>
             </>
           )}

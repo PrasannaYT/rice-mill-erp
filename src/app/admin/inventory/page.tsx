@@ -13,7 +13,7 @@ export default async function AdminInventoryPage({ searchParams }: { searchParam
   const params = await searchParams;
   const session = await getServerSession(authOptions);
 
-  if (!session || (session.user?.role !== 'ADMIN' && session.user?.role !== 'MANAGER')) {
+  if (!session || !['ADMIN', 'MANAGER', 'FLOOR_MANAGER', 'MILL_OWNER', 'SUPER_ADMIN'].includes(session.user?.role || '')) {
     redirect('/dashboard');
   }
 
@@ -73,7 +73,7 @@ export default async function AdminInventoryPage({ searchParams }: { searchParam
   // Fetch Packing Items Inventory
   const rawPackingItems = await PackingItemRepository.list();
 
-  const packingItems = rawPackingItems.map(item => ({
+  const packingItems = rawPackingItems.filter(item => Number(item.quantityBags) > 0).map(item => ({
     id: item.id,
     brandName: item.brandName,
     capacityKg: item.capacityKg.toString(),
@@ -113,26 +113,55 @@ export default async function AdminInventoryPage({ searchParams }: { searchParam
   });
 
   const syntheticPackingProcurements = rawPackingItems.map(item => {
-    const sales = syntheticPackingMovements.filter(m => m.productId === item.id);
-    const totalSold = sales.reduce((sum, s) => sum + s.quantity, 0);
-    const originalQuantity = Number(item.quantityBags) + totalSold;
+    const procuredQty = Number(item.initialQuantityBags) > 0 ? Number(item.initialQuantityBags) : Number(item.quantityBags);
 
     return {
       id: `proc_${item.id}`,
       type: 'PROCUREMENT',
-      quantity: originalQuantity,
+      quantity: procuredQty,
       createdAt: item.createdAt.toISOString(),
       productName: `${item.brandName} ${Number(item.capacityKg)} KG`,
       productId: item.id,
       productCategory: 'PACKAGING_MATERIAL',
-      fromGodownName: item.supplier?.name || 'External / Supplier',
+      fromGodownName: item.supplier?.name || 'Supplier',
       toGodownName: item.godown?.name || 'Godown'
     };
   });
+  const procurementBatchesForMovements = await prisma.procurementBatch.findMany({
+    where: { status: 'FINALIZED', deletedAt: null },
+    include: { product: true, godown: true, supplier: true, farmer: true },
+    orderBy: { createdAt: 'desc' },
+    take: 50
+  });
 
-  const allSafeStockMovements = [...safeStockMovements, ...syntheticPackingMovements, ...syntheticPackingProcurements].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const existingRefIds = new Set(stockMovements.map(m => m.referenceId).filter(Boolean));
 
-  const paddyProducts = products.filter(p => p.category === 'RAW_MATERIAL' || p.name.toLowerCase().includes('paddy'));
+  const syntheticProcurementMovements = procurementBatchesForMovements
+    .filter(b => b.product && b.godownId && !existingRefIds.has(b.id))
+    .map(b => ({
+      id: `proc_${b.id}`,
+      type: 'PROCUREMENT',
+      quantity: Number(b.netWeight || b.grossWeight || 0),
+      createdAt: b.createdAt.toISOString(),
+      productName: b.product?.name || 'Procured Item',
+      productId: b.productId!,
+      productCategory: b.product?.category || 'FINISHED_GOOD',
+      fromGodownName: b.farmer ? `Farmer (${b.farmer.name})` : `Supplier (${b.supplier?.name || 'Direct'})`,
+      toGodownName: b.godown?.name || 'Godown'
+    }));
+
+  const allSafeStockMovements = [...safeStockMovements, ...syntheticProcurementMovements, ...syntheticPackingMovements, ...syntheticPackingProcurements].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  const safeProducts = products.map(p => ({
+    id: p.id,
+    name: p.name,
+    category: p.category,
+    unit: p.unit,
+    hsnCode: p.hsnCode,
+    gstRate: p.gstRate ? Number(p.gstRate) : 0,
+  }));
+
+  const paddyProducts = safeProducts.filter(p => p.category === 'RAW_MATERIAL' || p.name.toLowerCase().includes('paddy'));
 
   const safeGodownsForClient = godowns.map(g => ({
     id: g.id,
@@ -157,16 +186,51 @@ export default async function AdminInventoryPage({ searchParams }: { searchParam
     }))
   }));
 
+  const spareParts = await prisma.sparePart.findMany({
+    where: {
+      deletedAt: null,
+      OR: [
+        { availableQty: { gt: 0 } },
+        { inUseQty: { gt: 0 } }
+      ]
+    },
+    orderBy: { name: 'asc' }
+  });
+  
+  const rawScrapEntries = await prisma.scrapEntry.findMany({
+    where: { status: 'ACCUMULATED' },
+    include: { sparePart: true },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  const scrapEntries = rawScrapEntries.map(entry => ({
+    id: entry.id,
+    sparePartName: entry.sparePart?.name || 'Unknown Part',
+    sparePartId: entry.sparePartId,
+    reason: entry.reason,
+    estimatedWeightKg: entry.estimatedWeightKg ? Number(entry.estimatedWeightKg) : null,
+    createdAt: entry.createdAt.toISOString()
+  }));
+
   return (
     <div className="min-h-screen">
       <InventoryDashboardClient
-      godowns={safeGodownsForClient}
-      paddyProducts={paddyProducts.length > 0 ? paddyProducts : products}
-      allLots={allLots}
-      packingItems={packingItems}
-      stockMovements={allSafeStockMovements}
-      editPackingId={params?.editPackingId}
-    />
+        godowns={safeGodownsForClient}
+        paddyProducts={paddyProducts.length > 0 ? paddyProducts : safeProducts}
+        allLots={allLots}
+        packingItems={packingItems}
+        stockMovements={allSafeStockMovements}
+        editPackingId={params?.editPackingId}
+        spareParts={spareParts.map(s => ({
+          id: s.id,
+          name: s.name,
+          category: s.category,
+          availableQty: s.availableQty,
+          inUseQty: s.inUseQty,
+          ratePerUnit: Number(s.ratePerUnit)
+        }))}
+        scrapEntries={scrapEntries}
+      />
     </div>
   );
 }

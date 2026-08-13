@@ -114,6 +114,14 @@ export class GodownRepository {
       await tx.stockMovement.deleteMany({ where: { OR: [{ fromGodownId: id }, { toGodownId: id }] } });
       await tx.lot.deleteMany({ where: { godownId: id } });
       await tx.procurementBatch.updateMany({ where: { godownId: id }, data: { godownId: null } });
+      
+      const packingItems = await tx.packingItem.findMany({ where: { godownId: id } });
+      const packingItemIds = packingItems.map(p => p.id);
+      if (packingItemIds.length > 0) {
+        await tx.paymentTransaction.updateMany({ where: { packingItemId: { in: packingItemIds } }, data: { packingItemId: null } });
+        await tx.packingItem.deleteMany({ where: { godownId: id } });
+      }
+      
       return tx.godown.delete({ where: { id } });
     });
   }

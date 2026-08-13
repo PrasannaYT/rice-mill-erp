@@ -21,7 +21,7 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
   const params = await searchParams;
   const session = await getServerSession(authOptions);
   
-  if (!session || (session.user?.role !== 'ADMIN' && session.user?.role !== 'MANAGER')) {
+  if (!session || (session.user?.role !== 'ADMIN' && session.user?.role !== 'MANAGER' && session.user?.role !== 'MILL_OWNER' && session.user?.role !== 'SUPER_ADMIN')) {
     redirect('/dashboard');
   }
 

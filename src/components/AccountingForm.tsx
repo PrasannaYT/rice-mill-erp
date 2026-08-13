@@ -16,6 +16,34 @@ type Supplier = { id: string; name: string; contact?: string | null; gstin?: str
 type ExpenseCategory = { id: string; name: string };
 type Bank = { id: string; bankName: string; accountNumber: string; balance: number | string | { toString(): string } };
 
+export function isProcurementRiceBatch(batch: any): boolean {
+  if (!batch) return false;
+
+  // 1. Explicit Paddy signals (Farmer attached, moisture metrics, broker commission)
+  if (batch.farmerId || (batch.farmer && batch.farmer.id)) return false;
+  if (batch.beforeDryingMoisture != null || batch.dryingShortage != null) return false;
+  if (batch.brokerCommissionRate != null || (batch.brokerCommissionTotal != null && Number(batch.brokerCommissionTotal) > 0)) return false;
+
+  const cat = (batch.product?.category || '').toUpperCase();
+  if (cat === 'RAW_MATERIAL' || cat === 'PADDY') return false;
+
+  // 2. Explicit Rice signals
+  const suppCat = (batch.supplier?.category || '').toUpperCase();
+  if (suppCat === 'RICE_MILL' || suppCat === 'RICE_SUPPLIER' || suppCat === 'RICE_VENDOR') return true;
+  if (cat.includes('FINISHED') || cat.includes('RICE')) return true;
+
+  const pName = (batch.product?.name || '').toUpperCase();
+  if (pName.includes('RICE')) return true;
+
+  const gType = (batch.godown?.type || '').toUpperCase();
+  if (gType === 'RICE') return true;
+
+  // 3. Direct Rice Procurement signature: Supplier batch without farmer or paddy broker tag
+  if (suppCat !== 'PADDY_BROKER' && !batch.farmerId) return true;
+
+  return false;
+}
+
 export type PaymentHistory = { id: string; amount: string; date: string };
 
 export type PendingProcurementBatch = {
@@ -46,6 +74,7 @@ export type PendingPackingItem = {
   payments?: PaymentHistory[];
   capacityKg: string | number;
   quantityBags: string | number;
+  initialQuantityBags?: string | number;
   perBagRate: string | number;
   createdAt: string;
   godown: { id: string; name: string };
@@ -124,10 +153,17 @@ export default function AccountingForm({
   const router = useRouter();
   const [activePayment, setActivePayment] = useState<{ id: string; type: 'PADDY' | 'PACKING' | 'SALES'; maxAmount: number; title: string } | null>(null);
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
-  const [queueFilter, setQueueFilter] = useState<'ALL' | 'PADDY' | 'PACKING' | 'SALES'>('ALL');
+  const [queueFilter, setQueueFilter] = useState<'ALL' | 'PADDY' | 'RICE' | 'PACKING' | 'SALES'>('ALL');
   const [isSyncing, setIsSyncing] = useState(false);
 
-  const filteredProcurements = pendingProcurements.filter(p => !skippedIds.includes(p.id) && (queueFilter === 'ALL' || queueFilter === 'PADDY'));
+  const filteredProcurements = pendingProcurements.filter(p => {
+    if (skippedIds.includes(p.id)) return false;
+    if (queueFilter === 'ALL') return true;
+    const isRice = isProcurementRiceBatch(p);
+    if (queueFilter === 'RICE') return isRice;
+    if (queueFilter === 'PADDY') return !isRice;
+    return false;
+  });
   const filteredPackingItems = pendingPackingItems.filter(p => !skippedIds.includes(p.id) && (queueFilter === 'ALL' || queueFilter === 'PACKING'));
   const filteredSales = pendingSales.filter(p => !skippedIds.includes(p.id) && (queueFilter === 'ALL' || queueFilter === 'SALES'));
 
@@ -210,7 +246,7 @@ export default function AccountingForm({
                 ACCOUNTING DESK
               </h2>
               <p className="mt-2 text-white/90 text-sm font-medium">
-                Review party details, confirm outbound procurement payments & inbound sales receipts, and manage cashbook.
+                Review party details, confirm procurement payments & sales receipts, and manage cashbook.
               </p>
             </div>
           </div>
@@ -223,7 +259,7 @@ export default function AccountingForm({
               className={`shrink-0 snap-start px-4 py-3 sm:py-2 font-display font-bold text-sm tracking-wider uppercase border-2 flex items-center transition-all ${activeTab === 'PROCUREMENT_PAYMENTS' ? 'bg-[var(--surface)] text-[var(--text)] border-[var(--border)] shadow-[4px_4px_0px_#0D0D0B] -translate-y-1' : 'bg-[var(--charcoal)] text-white border-[var(--charcoal)] hover:bg-[var(--surface)] hover:text-[var(--text)] hover:border-[var(--border)]'}`}
             >
               <ArrowUpCircle className={`w-5 h-5 mr-2 ${activeTab === 'PROCUREMENT_PAYMENTS' ? 'text-[var(--red)]' : 'text-white/70'}`} />
-              Outbound Payments
+              Procurement Payments
               <span className={`ml-3 px-2 py-0.5 font-black border-2 border-[var(--border)] ${activeTab === 'PROCUREMENT_PAYMENTS' ? 'bg-[var(--red)] text-white' : 'bg-[var(--surface)]/20 text-white border-transparent'}`}>
                 {totalPendingOutboundCount}
               </span>
@@ -235,7 +271,7 @@ export default function AccountingForm({
               className={`shrink-0 snap-start px-4 py-3 sm:py-2 font-display font-bold text-sm tracking-wider uppercase border-2 flex items-center transition-all ${activeTab === 'SALES_RECEIPTS' ? 'bg-[var(--surface)] text-[var(--text)] border-[var(--border)] shadow-[4px_4px_0px_#0D0D0B] -translate-y-1' : 'bg-[var(--charcoal)] text-white border-[var(--charcoal)] hover:bg-[var(--surface)] hover:text-[var(--text)] hover:border-[var(--border)]'}`}
             >
               <ArrowDownCircle className={`w-5 h-5 mr-2 ${activeTab === 'SALES_RECEIPTS' ? 'text-[var(--green)]' : 'text-white/70'}`} />
-              Inbound Receipts
+              Sales Receipts
               <span className={`ml-3 px-2 py-0.5 font-black border-2 border-[var(--border)] ${activeTab === 'SALES_RECEIPTS' ? 'bg-[var(--green)] text-[var(--text)]' : 'bg-[var(--surface)]/20 text-white border-transparent'}`}>
                 {pendingSales.length}
               </span>
@@ -268,7 +304,7 @@ export default function AccountingForm({
                 </button>
               </div>
               <div className="flex overflow-x-auto hide-scrollbar snap-x gap-2 pb-2 pr-24">
-                {['ALL', 'PADDY', 'PACKING', 'SALES'].map(pill => (
+                {['ALL', 'PADDY', 'RICE', 'PACKING', 'SALES'].map(pill => (
                   <button 
                     key={pill}
                     onClick={() => setQueueFilter(pill as any)}
@@ -277,7 +313,8 @@ export default function AccountingForm({
                     {pill} 
                     <span className="ml-2 opacity-70">
                       {pill === 'ALL' && `(${totalPendingOutboundCount + filteredSales.length})`}
-                      {pill === 'PADDY' && `(${filteredProcurements.length})`}
+                      {pill === 'PADDY' && `(${pendingProcurements.filter(p => !skippedIds.includes(p.id) && !isProcurementRiceBatch(p)).length})`}
+                      {pill === 'RICE' && `(${pendingProcurements.filter(p => !skippedIds.includes(p.id) && isProcurementRiceBatch(p)).length})`}
                       {pill === 'PACKING' && `(${filteredPackingItems.length})`}
                       {pill === 'SALES' && `(${filteredSales.length})`}
                     </span>
@@ -309,7 +346,7 @@ export default function AccountingForm({
                   <div className="text-center py-16 border-2 border-dashed border-[var(--dust)] text-[var(--muted)] bg-[var(--surface-2)] rounded-2xl p-8">
                     <CheckCircle2 className="w-16 h-16 text-[var(--green)] mx-auto mb-4 opacity-75" />
                     <p className="font-display font-black text-2xl uppercase tracking-widest text-[var(--text)]">All Settled</p>
-                    <p className="font-medium mt-2 text-sm">No pending payments for paddy or packing bags.</p>
+                    <p className="font-medium mt-2 text-sm">No pending payments for paddy, rice or packing bags.</p>
                   </div>
                 ) : (
                   <div className="space-y-6">
@@ -337,9 +374,14 @@ export default function AccountingForm({
                             <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
                               <div>
                                 <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                                  <span className="font-display font-black text-[10px] bg-[var(--rust)] text-white px-2.5 py-0.5 rounded border border-[var(--ink)] uppercase tracking-wider flex items-center">
-                                    <Truck className="w-3 h-3 mr-1" /> PADDY
-                                  </span>
+                                  {(() => {
+                                    const isRice = isProcurementRiceBatch(batch);
+                                    return (
+                                      <span className={`font-display font-black text-[10px] ${isRice ? 'bg-sky-600 border-sky-400' : 'bg-[var(--rust)] border-[var(--ink)]'} text-white px-2.5 py-0.5 rounded border uppercase tracking-wider flex items-center`}>
+                                        <Truck className="w-3 h-3 mr-1" /> {isRice ? 'RICE' : 'PADDY'}
+                                      </span>
+                                    );
+                                  })()}
                                   <span className="text-xs font-bold text-[var(--muted)] font-mono">
                                     {new Date(batch.createdAt).toLocaleDateString("en-IN", { month: 'short', day: 'numeric', year: 'numeric' })}
                                   </span>
@@ -378,12 +420,15 @@ export default function AccountingForm({
                             {/* Action Buttons */}
                             <div className="flex items-center gap-3 pt-2">
                               <Button
-                                onClick={() => setActivePayment({
-                                  id: batch.id,
-                                  type: 'PADDY',
-                                  maxAmount: remaining,
-                                  title: `Paddy Payment – ${batch.farmer?.name || batch.supplier.name}`
-                                })}
+                                onClick={() => {
+                                  const isRice = isProcurementRiceBatch(batch);
+                                  setActivePayment({
+                                    id: batch.id,
+                                    type: 'PADDY',
+                                    maxAmount: remaining,
+                                    title: `${isRice ? 'Rice' : 'Paddy'} Payment – ${batch.farmer?.name || batch.supplier.name}`
+                                  });
+                                }}
                                 className="flex-1 bg-[var(--red)] hover:bg-[#8B2E06] text-white py-3 font-black text-sm shadow-sm min-h-[46px]"
                               >
                                 RECORD PAYMENT
@@ -449,7 +494,7 @@ export default function AccountingForm({
 
                     {/* 2. Packaging Material & Bag Procurements */}
                     {filteredPackingItems.map((pkg, idx) => {
-                      const bags = Number(pkg.quantityBags);
+                      const bags = Number(pkg.initialQuantityBags || pkg.quantityBags);
                       const rate = Number(pkg.perBagRate);
                       const totalPayable = bags * rate;
                       const amountPaid = Number(pkg.amountPaid || 0);

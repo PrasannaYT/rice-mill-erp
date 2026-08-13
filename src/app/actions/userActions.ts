@@ -9,13 +9,13 @@ import { z } from "zod";
 
 async function checkAdminAuth() {
   const session = await getServerSession(authOptions);
-  if (!session || session.user?.role !== 'ADMIN') {
-    throw new Error("Unauthorized: Only admins can manage users");
+  if (!session || (session.user?.role !== 'ADMIN' && session.user?.role !== 'MILL_OWNER' && session.user?.role !== 'SUPER_ADMIN')) {
+    throw new Error("Unauthorized: Only admins and mill owners can manage users");
   }
   return session;
 }
 
-const roleSchema = z.enum(["ADMIN", "MANAGER", "WEIGHBRIDGE_OPERATOR", "FLOOR_MANAGER", "ACCOUNTANT"]);
+const roleSchema = z.enum(["ADMIN", "MANAGER", "WEIGHBRIDGE_OPERATOR", "FLOOR_MANAGER", "ACCOUNTANT", "MILL_OWNER", "SUPER_ADMIN"]);
 
 const createUserSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -42,7 +42,7 @@ const deleteUserSchema = z.object({
 });
 
 export async function createUserAction(formData: FormData): Promise<void> {
-  await checkAdminAuth();
+  const session = await checkAdminAuth();
   
   const parsed = createUserSchema.safeParse(Object.fromEntries(formData.entries()));
   if (!parsed.success) throw new Error(parsed.error.issues[0].message);
@@ -51,6 +51,10 @@ export async function createUserAction(formData: FormData): Promise<void> {
     const existing = await UserRepository.findByEmail(parsed.data.email);
     if (existing) {
       throw new Error("A user with this email already exists");
+    }
+
+    if (session.user?.role === 'MILL_OWNER' && (parsed.data.role === 'ADMIN' || parsed.data.role === 'SUPER_ADMIN')) {
+      throw new Error("Mill Owners cannot create Admin or Super Admin accounts");
     }
 
     const passwordHash = await bcrypt.hash(parsed.data.password, 10);
@@ -70,12 +74,18 @@ export async function createUserAction(formData: FormData): Promise<void> {
 }
 
 export async function deleteUserAction(formData: FormData): Promise<void> {
-  await checkAdminAuth();
+  const session = await checkAdminAuth();
   
   const parsed = deleteUserSchema.safeParse(Object.fromEntries(formData.entries()));
   if (!parsed.success) throw new Error(parsed.error.issues[0].message);
 
   try {
+    const targetUser = await UserRepository.findById(parsed.data.id);
+    if (!targetUser) throw new Error("User not found");
+    if (session.user?.role === 'MILL_OWNER' && (targetUser.role === 'ADMIN' || targetUser.role === 'SUPER_ADMIN')) {
+      throw new Error("Mill Owners cannot delete Admin or Super Admin accounts");
+    }
+
     await UserRepository.delete(parsed.data.id);
     revalidatePath('/admin/users');
   } catch (error) {
@@ -84,12 +94,18 @@ export async function deleteUserAction(formData: FormData): Promise<void> {
 }
 
 export async function updateUserAction(formData: FormData): Promise<void> {
-  await checkAdminAuth();
+  const session = await checkAdminAuth();
 
   const parsed = updateUserSchema.safeParse(Object.fromEntries(formData.entries()));
   if (!parsed.success) throw new Error(parsed.error.issues[0].message);
 
   try {
+    const targetUser = await UserRepository.findById(parsed.data.id);
+    if (!targetUser) throw new Error("User not found");
+    if (session.user?.role === 'MILL_OWNER' && (targetUser.role === 'ADMIN' || targetUser.role === 'SUPER_ADMIN' || parsed.data.role === 'ADMIN' || parsed.data.role === 'SUPER_ADMIN')) {
+      throw new Error("Mill Owners cannot edit Admin/Super Admin accounts or grant Admin/Super Admin roles");
+    }
+
     await UserRepository.update(parsed.data.id, {
       name: parsed.data.name,
       email: parsed.data.email,
@@ -103,12 +119,18 @@ export async function updateUserAction(formData: FormData): Promise<void> {
 }
 
 export async function resetPasswordAction(formData: FormData): Promise<void> {
-  await checkAdminAuth();
-
+  const session = await checkAdminAuth();
+  
   const parsed = resetPasswordSchema.safeParse(Object.fromEntries(formData.entries()));
   if (!parsed.success) throw new Error(parsed.error.issues[0].message);
 
   try {
+    const targetUser = await UserRepository.findById(parsed.data.id);
+    if (!targetUser) throw new Error("User not found");
+    if (session.user?.role === 'MILL_OWNER' && (targetUser.role === 'ADMIN' || targetUser.role === 'SUPER_ADMIN')) {
+      throw new Error("Mill Owners cannot reset Admin or Super Admin passwords");
+    }
+
     const passwordHash = await bcrypt.hash(parsed.data.password, 10);
     await UserRepository.update(parsed.data.id, { passwordHash });
     revalidatePath('/admin/users');

@@ -12,9 +12,7 @@ export const metadata = {
   title: 'Sales & Dispatch - Rice Mill ERP',
 };
 
-export default async function SalesPage({ searchParams }: { searchParams: Promise<{ editInvoiceId?: string }> }) {
-  const resolvedSearchParams = await searchParams;
-  const editInvoiceId = resolvedSearchParams.editInvoiceId;
+export default async function SalesPage() {
   const session = await getServerSession(authOptions);
 
   if (!session) {
@@ -78,16 +76,46 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
     gstRate: p.gstRate?.toString() || '0'
   }));
 
-  let initialInvoice = null;
-  if (editInvoiceId) {
-    const inv = await prisma.salesInvoice.findUnique({
-      where: { id: editInvoiceId },
-      include: { items: true }
-    });
-    if (inv) {
-      initialInvoice = JSON.parse(JSON.stringify(inv));
-    }
-  }
+  // Fetch pending drafts
+  const pendingDraftsRaw = await prisma.salesInvoice.findMany({
+    where: { status: 'DRAFT', userId: session.user.id },
+    include: { items: true, customer: true },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  const pendingDrafts = pendingDraftsRaw.map(d => ({
+    id: d.id,
+    invoiceNumber: d.invoiceNumber,
+    customerId: d.customerId,
+    customerName: d.customer.name,
+    vehicleId: d.vehicleId || '',
+    deliveryNote: d.deliveryNote || '',
+    modeOfPayment: d.modeOfPayment || '',
+    buyersOrderNo: d.buyersOrderNo || '',
+    dispatchDocNo: d.dispatchDocNo || '',
+    destination: d.destination || '',
+    termsOfDelivery: d.termsOfDelivery || '',
+    otherReferences: d.otherReferences || '',
+    vehicleNo: d.vehicleNo || '',
+    transportFreightAmount: d.transportFreightAmount?.toString() || '',
+    items: d.items.map(i => {
+      // Find packing item id from name if possible
+      let packingItemId = '';
+      if (i.packingItemName) {
+        const match = rawPackingItems.find(p => `${p.brandName} ${Number(p.capacityKg)} KG` === i.packingItemName);
+        if (match) packingItemId = match.id;
+      }
+      return {
+        productId: i.productId,
+        godownId: i.godownId,
+        packingItemId,
+        quantity: i.quantity.toString(),
+        rate: i.rate.toString(),
+        numberOfBags: '', // This will be calculated in the UI or we could store it
+        bagCapacityKg: '',
+      };
+    })
+  }));
 
   return (
     <div className="min-h-screen">
@@ -105,7 +133,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
           godowns={godowns} 
           lots={safeLots} 
           packingItems={packingItems}
-          initialInvoice={initialInvoice}
+          initialDrafts={pendingDrafts}
         />
       </div>
     </div>

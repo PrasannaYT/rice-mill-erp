@@ -509,9 +509,23 @@ input[type="number"] {
   }
 }
 
-/* ━━━━━━━ PDF EXPORT STYLES ━━━━━━━ */
 #invoice-print-area[data-exporting="true"] input,
 #invoice-print-area[data-exporting="true"] textarea {
   border: none !important;
   background-color: transparent !important;
 }
+
+/* ━━━━━━━ PERMANENTLY SUPPRESS NEXT.JS DEV INDICATORS & OVERLAYS ━━━━━━━ */
+next-route-announcer,
+.next-dev-overlay,
+[data-nextjs-toast],
+[data-nextjs-toast-errors],
+#next-logo,
+nextjs-portal,
+div[data-nextjs-dialog-overlay] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+

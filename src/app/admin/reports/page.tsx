@@ -22,13 +22,16 @@ import {
 } from "@/components/AdvancedCharts";
 import { AppHeader } from "@/components/ui/AppHeader";
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export const metadata = {
   title: 'Reports & Analytics – Rice Mill ERP',
 };
 
 export default async function ReportsDashboardPage() {
   const session = await getServerSession(authOptions);
-  if (!session || (session.user?.role !== 'ADMIN' && session.user?.role !== 'MANAGER')) {
+  if (!session || (session.user?.role !== 'ADMIN' && session.user?.role !== 'MANAGER' && session.user?.role !== 'MILL_OWNER' && session.user?.role !== 'SUPER_ADMIN')) {
     redirect('/dashboard');
   }
 
@@ -286,7 +289,11 @@ export default async function ReportsDashboardPage() {
                 </div>
               ) : (
                 godownSummary.map((godown: any) => {
-                  const isRiceGodown = godown.godownName.toLowerCase().includes('rice') || godown.godownName.toLowerCase().includes('central');
+                  const isRiceGodown = (godown.godownType || '').toUpperCase() === 'RICE' ||
+                                       godown.godownName.toLowerCase().includes('rice') || 
+                                       godown.godownName.toLowerCase().includes('central') ||
+                                       godown.godownName.toLowerCase().includes('finish') ||
+                                       (godown.items && godown.items.some((i: any) => i.category === 'FINISHED_GOOD' || (i.product || '').toLowerCase().includes('rice')));
                   
                   return (
                     <div key={godown.godownId} className="p-4 bg-neutral-900/80 border border-neutral-800 rounded-xl space-y-2.5 hover:border-emerald-500/40 transition-colors">
@@ -298,7 +305,9 @@ export default async function ReportsDashboardPage() {
                             <span>{isRiceGodown ? '🍚' : '🌾'}</span>
                             <span>{godown.godownName}</span>
                           </h3>
-                          <span className="text-[10px] text-neutral-400 font-medium block">{godown.location}</span>
+                          <span className="text-[10px] text-neutral-400 font-medium block">
+                            {isRiceGodown ? 'Central Rice Storage Godown' : (godown.location || 'Storage Godown')}
+                          </span>
                         </div>
 
                         <div className="text-right">
@@ -322,13 +331,20 @@ export default async function ReportsDashboardPage() {
                           }, {});
                           
                           return Object.entries(grouped).map(([category, items]: [string, any]) => {
-                            const catLabel = category === 'RAW_MATERIAL' ? 'PADDY' : category === 'FINISHED_GOOD' ? 'RICE' : 'BYPRODUCT';
-                            const catColor = category === 'FINISHED_GOOD' ? 'bg-sky-500/10 text-sky-400 border border-sky-500/20' :
+                            const catLabel = (category === 'FINISHED_GOOD' || category === 'RICE' || category.includes('FINISHED')) ? 'RICE' : 
+                                             (category === 'RAW_MATERIAL' || category === 'PADDY') ? 'PADDY' : 
+                                             category === 'PACKAGING_MATERIAL' ? 'PACKAGING' : 
+                                             category === 'SPARE_PART' ? 'SPARES' : 'BYPRODUCT';
+                            
+                            const catColor = (category === 'FINISHED_GOOD' || category === 'RICE' || category.includes('FINISHED')) ? 'bg-sky-500/10 text-sky-400 border border-sky-500/20' :
+                                              category === 'PACKAGING_MATERIAL' ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' :
+                                              category === 'SPARE_PART' ? 'bg-pink-500/10 text-pink-400 border border-pink-500/20' :
                                               category === 'BYPRODUCT' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
                                               'bg-[#F5A623]/10 text-[#F5A623] border border-[#F5A623]/20';
                             
                             const catValue = items.reduce((sum: number, i: any) => sum + (i.estimatedValue || 0), 0);
                             const catQty = items.reduce((sum: number, i: any) => sum + (i.quantity || 0), 0);
+                            const qtyUnit = (category === 'PACKAGING_MATERIAL' || category === 'SPARE_PART') ? 'units' : 'kg';
                             
                             return (
                               <div key={category} className="space-y-1.5 bg-[#121212]/50 p-2 rounded-xl border border-neutral-800/40">
@@ -337,7 +353,7 @@ export default async function ReportsDashboardPage() {
                                     {catLabel}
                                   </span>
                                   <div className="text-right flex items-center gap-3">
-                                    <span className="text-[10px] text-neutral-400 font-mono">{catQty.toLocaleString('en-IN')} kg</span>
+                                    <span className="text-[10px] text-neutral-400 font-mono">{catQty.toLocaleString('en-IN')} {qtyUnit}</span>
                                     <span className="text-[10px] font-bold text-emerald-400/90 font-mono min-w-[70px]">{fmt(catValue)}</span>
                                   </div>
                                 </div>

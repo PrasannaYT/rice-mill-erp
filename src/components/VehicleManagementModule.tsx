@@ -30,11 +30,10 @@ function CompliancePill({ label, expiry }: { label: string; expiry: string | nul
 
   if (!exp) return null;
   return (
-    <div className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border ${
-      isExpired ? 'bg-red-950/50 border-red-900/60 text-red-400' :
-      isSoon ? 'bg-amber-950/50 border-amber-900/60 text-amber-400' :
-      'bg-emerald-950/40 border-emerald-900/50 text-emerald-400'
-    }`}>
+    <div className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border ${isExpired ? 'bg-red-950/50 border-red-900/60 text-red-400' :
+        isSoon ? 'bg-amber-950/50 border-amber-900/60 text-amber-400' :
+          'bg-emerald-950/40 border-emerald-900/50 text-emerald-400'
+      }`}>
       {isExpired ? <ShieldAlert className="w-3 h-3" /> : isSoon ? <FileWarning className="w-3 h-3" /> : <BadgeCheck className="w-3 h-3" />}
       {label}
       {isExpired ? ' EXP' : isSoon ? ` ${diffDays}d` : ' OK'}
@@ -59,7 +58,7 @@ export default function VehicleManagementModule({
 
   const [selectedVehicleId, setSelectedVehicleId] = useState('');
   const [editMode, setEditMode] = useState(false);
-  const isAdmin = userRole === 'ADMIN' || userRole === 'MANAGER';
+  const isAdmin = ['ADMIN', 'MANAGER', 'MILL_OWNER', 'SUPER_ADMIN'].includes(userRole);
 
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
@@ -131,8 +130,8 @@ export default function VehicleManagementModule({
     e.preventDefault(); setIsSubmitting(true);
     try {
       const fd = new FormData();
-      fd.append('vehicleId', selectedVehicleId); 
-      
+      fd.append('vehicleId', selectedVehicleId);
+
       if (isCreatingCategory) {
         if (!newCategoryName.trim()) throw new Error("Category name is required");
         fd.append('categoryId', `NEW:${newCategoryName.trim()}`);
@@ -171,7 +170,7 @@ export default function VehicleManagementModule({
   const handleEditClick = (v: SerializedVehicle) => {
     setEditMode(true); setSelectedVehicleId(v.id);
     setFormLicensePlate(v.licensePlate); setFormType(v.type);
-    setFormTareWeight(v.tareWeight ? v.tareWeight.toString() : '');
+    setFormTareWeight(v.tareWeight != null ? v.tareWeight.toString() : '');
     setFormInsurance(v.insuranceExpiry ? v.insuranceExpiry.split('T')[0] : '');
     setFormFitness(v.fitnessExpiry ? v.fitnessExpiry.split('T')[0] : '');
     setFormPollution(v.pollutionExpiry ? v.pollutionExpiry.split('T')[0] : '');

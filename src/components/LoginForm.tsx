@@ -29,13 +29,16 @@ export default function LoginForm() {
 
       if (res?.error) {
         setError('Invalid email or password. Please try again.');
+        setLoading(false);
       } else {
+        if (typeof window !== 'undefined') {
+          sessionStorage.removeItem('erpsplash_shown');
+        }
         router.push('/dashboard');
         router.refresh();
       }
     } catch {
       setError('An unexpected error occurred. Please try again.');
-    } finally {
       setLoading(false);
     }
   };
@@ -53,86 +56,88 @@ export default function LoginForm() {
   return (
     <motion.div
       variants={containerVariants}
-      initial="visible"
+      initial="hidden"
       animate="visible"
-      className="w-full"
+      className="w-full max-w-md space-y-8 p-8 bg-[#161618] rounded-2xl border border-white/10 shadow-2xl backdrop-blur-xl"
     >
-      {/* Logo & Title */}
-      <motion.div variants={itemVariants} className="mb-8">
-        <div className="inline-flex items-center gap-3 mb-4">
-          <div className="w-12 h-12 bg-[var(--gold)] border-2 border-[var(--border)] flex items-center justify-center shadow-brutal">
-            <Wheat className="w-6 h-6 text-[var(--text)]" />
-          </div>
-          <div>
-            <div className="text-xs font-display font-bold uppercase tracking-[0.15em] text-[var(--muted)]">Operations</div>
-            <div className="font-display font-black text-xl text-[var(--text)] leading-tight">Rice Mill ERP</div>
-          </div>
+      <motion.div variants={itemVariants} className="text-center space-y-2">
+        <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 mb-2">
+          <Wheat className="w-6 h-6" />
         </div>
-        <h1 className="font-display font-black text-3xl sm:text-4xl text-[var(--text)] leading-none">
-          Welcome<br />
-          <span className="text-[var(--gold)]">Back.</span>
+        <h1 className="text-2xl font-bold tracking-tight text-white font-display">
+          Rice Mill ERP
         </h1>
-        <p className="mt-2 text-sm text-[var(--muted)] font-medium">
-          Sign in to your operations dashboard
+        <p className="text-sm text-neutral-400">
+          Sign in to access your mill management portal
         </p>
       </motion.div>
 
-      {/* Error Banner */}
       {error && (
         <motion.div
-          initial={{ opacity: 0, x: -16 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="mb-5 p-3 bg-red-50 border-2 border-red-500 text-red-700 text-sm font-semibold font-display"
-          style={{ boxShadow: '3px 3px 0px #991b1b' }}
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-3.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-medium text-center"
         >
-          ⚠ {error}
+          {error}
         </motion.div>
       )}
 
-      {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-4">
-        <motion.div variants={itemVariants}>
-          <Input
-            label="Email Address"
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="operator@mill.com"
-            autoComplete="email"
-            icon={<Mail className="w-4 h-4" />}
-          />
+        <motion.div variants={itemVariants} className="space-y-1.5">
+          <label className="text-xs font-semibold text-neutral-300 uppercase tracking-wider">
+            Email Address
+          </label>
+          <div className="relative">
+            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
+            <Input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="admin@ricemill.com"
+              required
+              className="pl-10 bg-neutral-900/80 border-white/10 text-white placeholder:text-neutral-600 focus:border-amber-500/50"
+            />
+          </div>
         </motion.div>
 
-        <motion.div variants={itemVariants}>
-          <Input
-            label="Password"
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-            autoComplete="current-password"
-            icon={<Lock className="w-4 h-4" />}
-          />
+        <motion.div variants={itemVariants} className="space-y-1.5">
+          <label className="text-xs font-semibold text-neutral-300 uppercase tracking-wider">
+            Password
+          </label>
+          <div className="relative">
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
+            <Input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              required
+              className="pl-10 bg-neutral-900/80 border-white/10 text-white placeholder:text-neutral-600 focus:border-amber-500/50"
+            />
+          </div>
         </motion.div>
 
         <motion.div variants={itemVariants} className="pt-2">
           <Button
             type="submit"
-            variant="primary"
-            size="lg"
-            loading={loading}
-            className="w-full text-base"
+            disabled={loading}
+            className="w-full h-11 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-semibold shadow-lg shadow-amber-500/10 transition-all cursor-pointer"
           >
-            {loading ? 'Signing in...' : 'Sign In →'}
+            {loading ? (
+              <span className="flex items-center gap-2">
+                <span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                Signing in...
+              </span>
+            ) : (
+              'Sign In'
+            )}
           </Button>
         </motion.div>
       </form>
 
-      <motion.p variants={itemVariants} className="mt-6 text-center text-xs text-[var(--muted)]">
-        Rice Mill ERP · Secure Operations Platform
-      </motion.p>
+      <motion.div variants={itemVariants} className="pt-4 border-t border-white/5 text-center text-xs text-neutral-500">
+        Enterprise Rice Mill Operations & Inventory System
+      </motion.div>
     </motion.div>
   );
 }

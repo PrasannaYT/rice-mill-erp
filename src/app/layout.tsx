@@ -21,6 +21,9 @@ export const metadata: Metadata = {
   title: "Rice Mill ERP – Operations Dashboard",
   description: "All-in-one operations platform for Rice Mill management",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/favicon.ico",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",

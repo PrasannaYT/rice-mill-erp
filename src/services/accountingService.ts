@@ -32,8 +32,8 @@ export class AccountingService {
     const entityCount = [data.customerId, data.supplierId, data.expenseCategoryId].filter(Boolean).length;
     
     if (data.type === 'RECEIPT' || data.type === 'PAYMENT') {
-      if (entityCount !== 1) {
-        throw new Error("Transaction must apply to exactly one entity (Customer, Supplier, or Expense Category).");
+      if (entityCount > 1) {
+        throw new Error("Transaction cannot apply to multiple entities simultaneously.");
       }
     } else {
       if (entityCount > 1) {
@@ -187,15 +187,16 @@ export class AccountingService {
     const brokerCommission = new Decimal(Number(batch.brokerCommissionTotal || 0));
     const totalOutbound = farmerPayable.plus(brokerCommission);
     const amountPaidSoFar = new Decimal(Number(batch.amountPaid || 0));
-    const remainingBalance = totalOutbound.minus(amountPaidSoFar);
+    const remainingBalance = Math.round((totalOutbound.toNumber() - amountPaidSoFar.toNumber()) * 100) / 100;
 
-    if (remainingBalance.lte(0)) {
+    if (remainingBalance <= 0) {
       throw new Error("This batch is already fully paid.");
     }
 
     const paymentAmount = new Decimal(data.amount);
-    if (paymentAmount.lte(0) || paymentAmount.gt(remainingBalance)) {
-      throw new Error(`Invalid payment amount. Must be between 0 and ${remainingBalance.toNumber()}`);
+    const roundedPayment = Math.round(paymentAmount.toNumber() * 100) / 100;
+    if (roundedPayment <= 0 || roundedPayment > remainingBalance + 0.01) {
+      throw new Error(`Invalid payment amount. Must be between 0 and ${remainingBalance}`);
     }
 
     if ((data.mode === 'BANK' || data.mode === 'UPI') && !data.bankId) {
@@ -209,68 +210,36 @@ export class AccountingService {
       const farmerPayment = Decimal.min(paymentAmount, farmerRemaining);
       const brokerPayment = paymentAmount.minus(farmerPayment);
 
-      const newAmountPaid = amountPaidSoFar.plus(paymentAmount);
-      const isFullyPaid = newAmountPaid.gte(totalOutbound);
+      const newAmountPaid = Math.round((amountPaidSoFar.toNumber() + roundedPayment) * 100) / 100;
+      const isFullyPaid = Math.round((totalOutbound.toNumber() - newAmountPaid) * 100) / 100 <= 0.01;
 
       // 1. Update Batch
       await tx.procurementBatch.update({
         where: { id: data.batchId },
         data: { 
-          amountPaid: newAmountPaid.toNumber(),
+          amountPaid: newAmountPaid,
           status: isFullyPaid ? 'PAID' : 'PARTIALLY_PAID',
           fullyPaidAt: isFullyPaid ? new Date() : null
         }
       });
 
-      // 2. Process Farmer Payment & Ledger if applicable
-      if (batch.farmerId && farmerPayment.gt(0)) {
-        await tx.farmer.update({
-          where: { id: batch.farmerId },
-          data: { balance: { decrement: farmerPayment.toNumber() } }
-        });
-
-        const farmerTx = await tx.paymentTransaction.create({
-          data: {
-            type: 'PAYMENT',
-            mode: data.mode,
-            amount: farmerPayment.toNumber(),
-            referenceNumber: data.referenceNumber,
-            supplierId: batch.supplierId,
-            procurementBatchId: batch.id,
-            bankId: data.bankId,
-            notes: `Cashier Partial Payment to Farmer: ${batch.farmer?.name || 'N/A'} for Batch #${batch.id.slice(-8)}. ${data.notes || ''}`.trim(),
-            userId: data.userId
-          }
-        });
-
-        await tx.ledgerEntry.create({
-          data: {
-            farmerId: batch.farmerId,
-            transactionType: 'DEBIT',
-            amount: farmerPayment.toNumber(),
-            description: `Payment Settled by Cashier (${data.mode}) - Ref: ${data.referenceNumber || 'N/A'}`,
-            referenceId: farmerTx.id
-          }
-        });
-      }
-
-      // 3. Process Broker Commission Payment & Ledger if applicable
-      if (brokerPayment.gt(0)) {
+      if (!batch.farmerId) {
+        // Direct Supplier Procurement (e.g. Rice Procurement)
         await tx.supplier.update({
           where: { id: batch.supplierId },
-          data: { balance: { decrement: brokerPayment.toNumber() } }
+          data: { balance: { decrement: roundedPayment } }
         });
 
-        const brokerTx = await tx.paymentTransaction.create({
+        const supplierTx = await tx.paymentTransaction.create({
           data: {
             type: 'PAYMENT',
             mode: data.mode,
-            amount: brokerPayment.toNumber(),
+            amount: roundedPayment,
             referenceNumber: data.referenceNumber,
             supplierId: batch.supplierId,
             procurementBatchId: batch.id,
             bankId: data.bankId,
-            notes: `Cashier Partial Payment for Broker Commission: ${batch.supplier.name} for Batch #${batch.id.slice(-8)}. ${data.notes || ''}`.trim(),
+            notes: `Cashier Payment to Supplier: ${batch.supplier.name} for Procurement Batch #${batch.id.slice(-8)}. ${data.notes || ''}`.trim(),
             userId: data.userId
           }
         });
@@ -279,11 +248,74 @@ export class AccountingService {
           data: {
             supplierId: batch.supplierId,
             transactionType: 'DEBIT',
-            amount: brokerPayment.toNumber(),
-            description: `Broker Commission Settled by Cashier (${data.mode}) - Ref: ${data.referenceNumber || 'N/A'}`,
-            referenceId: brokerTx.id
+            amount: roundedPayment,
+            description: `Procurement Payment Settled by Cashier (${data.mode}) - Ref: ${data.referenceNumber || 'N/A'}`,
+            referenceId: supplierTx.id
           }
         });
+      } else {
+        // 2. Process Farmer Payment & Ledger if applicable
+        if (batch.farmerId && farmerPayment.gt(0)) {
+          await tx.farmer.update({
+            where: { id: batch.farmerId },
+            data: { balance: { decrement: farmerPayment.toNumber() } }
+          });
+
+          const farmerTx = await tx.paymentTransaction.create({
+            data: {
+              type: 'PAYMENT',
+              mode: data.mode,
+              amount: farmerPayment.toNumber(),
+              referenceNumber: data.referenceNumber,
+              procurementBatchId: batch.id,
+              bankId: data.bankId,
+              notes: `Cashier Partial Payment to Farmer: ${batch.farmer?.name || 'N/A'} for Batch #${batch.id.slice(-8)}. ${data.notes || ''}`.trim(),
+              userId: data.userId
+            }
+          });
+
+          await tx.ledgerEntry.create({
+            data: {
+              farmerId: batch.farmerId,
+              transactionType: 'DEBIT',
+              amount: farmerPayment.toNumber(),
+              description: `Payment Settled by Cashier (${data.mode}) - Ref: ${data.referenceNumber || 'N/A'}`,
+              referenceId: farmerTx.id
+            }
+          });
+        }
+
+        // 3. Process Broker Commission Payment & Ledger if applicable
+        if (brokerPayment.gt(0)) {
+          await tx.supplier.update({
+            where: { id: batch.supplierId },
+            data: { balance: { decrement: brokerPayment.toNumber() } }
+          });
+
+          const brokerTx = await tx.paymentTransaction.create({
+            data: {
+              type: 'PAYMENT',
+              mode: data.mode,
+              amount: brokerPayment.toNumber(),
+              referenceNumber: data.referenceNumber,
+              supplierId: batch.supplierId,
+              procurementBatchId: batch.id,
+              bankId: data.bankId,
+              notes: `Cashier Partial Payment for Broker Commission: ${batch.supplier.name} for Batch #${batch.id.slice(-8)}. ${data.notes || ''}`.trim(),
+              userId: data.userId
+            }
+          });
+
+          await tx.ledgerEntry.create({
+            data: {
+              supplierId: batch.supplierId,
+              transactionType: 'DEBIT',
+              amount: brokerPayment.toNumber(),
+              description: `Broker Commission Settled by Cashier (${data.mode}) - Ref: ${data.referenceNumber || 'N/A'}`,
+              referenceId: brokerTx.id
+            }
+          });
+        }
       }
 
       // 4. Update Bank Balance if BANK or UPI
@@ -322,15 +354,16 @@ export class AccountingService {
 
     const totalInbound = new Decimal(Number(invoice.grandTotal));
     const amountPaidSoFar = new Decimal(Number(invoice.amountPaid || 0));
-    const remainingBalance = totalInbound.minus(amountPaidSoFar);
+    const remainingBalance = Math.round((totalInbound.toNumber() - amountPaidSoFar.toNumber()) * 100) / 100;
 
-    if (remainingBalance.lte(0)) {
+    if (remainingBalance <= 0) {
       throw new Error("This invoice is already fully paid.");
     }
 
     const receiptAmount = new Decimal(data.amount);
-    if (receiptAmount.lte(0) || receiptAmount.gt(remainingBalance)) {
-      throw new Error(`Invalid receipt amount. Must be between 0 and ${remainingBalance.toNumber()}`);
+    const roundedReceipt = Math.round(receiptAmount.toNumber() * 100) / 100;
+    if (roundedReceipt <= 0 || roundedReceipt > remainingBalance + 0.01) {
+      throw new Error(`Invalid receipt amount. Must be between 0 and ${remainingBalance}`);
     }
 
     if ((data.mode === 'BANK' || data.mode === 'UPI') && !data.bankId) {
@@ -338,14 +371,14 @@ export class AccountingService {
     }
 
     return prisma.$transaction(async (tx) => {
-      const newAmountPaid = amountPaidSoFar.plus(receiptAmount);
-      const isFullyPaid = newAmountPaid.gte(totalInbound);
+      const newAmountPaid = Math.round((amountPaidSoFar.toNumber() + roundedReceipt) * 100) / 100;
+      const isFullyPaid = Math.round((totalInbound.toNumber() - newAmountPaid) * 100) / 100 <= 0.01;
 
       // 1. Update Sales Invoice
       await tx.salesInvoice.update({
         where: { id: data.invoiceId },
         data: { 
-          amountPaid: newAmountPaid.toNumber(),
+          amountPaid: newAmountPaid,
           status: isFullyPaid ? 'PAID' : 'PARTIALLY_PAID',
           fullyPaidAt: isFullyPaid ? new Date() : null
         }
@@ -367,7 +400,7 @@ export class AccountingService {
           customerId: invoice.customerId,
           salesInvoiceId: invoice.id,
           bankId: data.bankId,
-          notes: `Cashier Partial Receipt for Sales Invoice ${invoice.invoiceNumber}. ${data.notes || ''}`.trim(),
+          notes: `Cashier Receipt for Sales Invoice ${invoice.invoiceNumber}. ${data.notes || ''}`.trim(),
           userId: data.userId
         }
       });
@@ -388,100 +421,6 @@ export class AccountingService {
         await tx.bank.update({
           where: { id: data.bankId },
           data: { balance: { increment: receiptAmount.toNumber() } }
-        });
-      }
-
-      return invoice;
-    });
-  }
-
-  /**
-   * Cashier Confirmation for Sales Refund (when invoice amount decreases below amount paid)
-   */
-  static async confirmSalesRefund(data: {
-    invoiceId: string;
-    amount: number;
-    mode: 'CASH' | 'BANK' | 'UPI';
-    bankId?: string;
-    referenceNumber?: string;
-    notes?: string;
-    userId: string;
-  }) {
-    const invoice = await prisma.salesInvoice.findUnique({
-      where: { id: data.invoiceId },
-      include: { customer: true }
-    });
-
-    if (!invoice) throw new Error("Sales invoice not found.");
-    
-    const totalInbound = new Decimal(Number(invoice.grandTotal));
-    const amountPaidSoFar = new Decimal(Number(invoice.amountPaid || 0));
-    const refundDue = amountPaidSoFar.minus(totalInbound);
-
-    if (refundDue.lte(0)) {
-      throw new Error("No refund is due for this invoice.");
-    }
-
-    const refundAmount = new Decimal(data.amount);
-    if (refundAmount.lte(0) || refundAmount.gt(refundDue)) {
-      throw new Error(`Invalid refund amount. Must be between 0 and ${refundDue.toNumber()}`);
-    }
-
-    if ((data.mode === 'BANK' || data.mode === 'UPI') && !data.bankId) {
-      throw new Error("Bank account is required for BANK or UPI transactions.");
-    }
-
-    return prisma.$transaction(async (tx) => {
-      const newAmountPaid = amountPaidSoFar.minus(refundAmount);
-      const isFullyPaid = newAmountPaid.lte(totalInbound);
-
-      // 1. Update Sales Invoice
-      await tx.salesInvoice.update({
-        where: { id: data.invoiceId },
-        data: { 
-          amountPaid: newAmountPaid.toNumber(),
-          status: isFullyPaid ? 'PAID' : 'PARTIALLY_PAID',
-          fullyPaidAt: isFullyPaid ? new Date() : null
-        }
-      });
-
-      // 2. Increment Customer Balance (Debit customer account since we are giving money back, reducing their credit balance)
-      await tx.customer.update({
-        where: { id: invoice.customerId },
-        data: { balance: { increment: refundAmount.toNumber() } }
-      });
-
-      // 3. Create Payment Transaction (This is a PAYMENT to customer)
-      const refundTx = await tx.paymentTransaction.create({
-        data: {
-          type: 'PAYMENT',
-          mode: data.mode,
-          amount: refundAmount.toNumber(),
-          referenceNumber: data.referenceNumber,
-          customerId: invoice.customerId,
-          salesInvoiceId: invoice.id,
-          bankId: data.bankId,
-          notes: `Cashier Refund for Sales Invoice ${invoice.invoiceNumber}. ${data.notes || ''}`.trim(),
-          userId: data.userId
-        }
-      });
-
-      // 4. Create Ledger Entry for Customer
-      await tx.ledgerEntry.create({
-        data: {
-          customerId: invoice.customerId,
-          transactionType: 'DEBIT',
-          amount: refundAmount.toNumber(),
-          description: `Invoice ${invoice.invoiceNumber} Refund Issued (${data.mode}) - Ref: ${data.referenceNumber || 'N/A'}`,
-          referenceId: refundTx.id
-        }
-      });
-
-      // 5. Update Bank Balance if BANK or UPI
-      if (data.bankId && (data.mode === 'BANK' || data.mode === 'UPI')) {
-        await tx.bank.update({
-          where: { id: data.bankId },
-          data: { balance: { decrement: refundAmount.toNumber() } }
         });
       }
 
@@ -511,17 +450,19 @@ export class AccountingService {
       throw new Error("Only FINALIZED or PARTIALLY_PAID packing material procurements can receive payments.");
     }
 
-    const totalPayable = new Decimal(Number(item.quantityBags)).times(new Decimal(Number(item.perBagRate)));
+    const originalBags = Number(item.initialQuantityBags) > 0 ? Number(item.initialQuantityBags) : Number(item.quantityBags);
+    const totalPayable = new Decimal(originalBags).times(new Decimal(Number(item.perBagRate)));
     const amountPaidSoFar = new Decimal(Number(item.amountPaid || 0));
-    const remainingBalance = totalPayable.minus(amountPaidSoFar);
+    const remainingBalance = Math.round((totalPayable.toNumber() - amountPaidSoFar.toNumber()) * 100) / 100;
 
-    if (remainingBalance.lte(0)) {
+    if (remainingBalance <= 0) {
       throw new Error("This packing material order is already fully paid.");
     }
 
     const paymentAmount = new Decimal(data.amount);
-    if (paymentAmount.lte(0) || paymentAmount.gt(remainingBalance)) {
-      throw new Error(`Invalid payment amount. Must be between 0 and ${remainingBalance.toNumber()}`);
+    const roundedPayment = Math.round(paymentAmount.toNumber() * 100) / 100;
+    if (roundedPayment <= 0 || roundedPayment > remainingBalance + 0.01) {
+      throw new Error(`Invalid payment amount. Must be between 0 and ${remainingBalance}`);
     }
 
     if ((data.mode === 'BANK' || data.mode === 'UPI') && !data.bankId) {
@@ -529,14 +470,14 @@ export class AccountingService {
     }
 
     return prisma.$transaction(async (tx) => {
-      const newAmountPaid = amountPaidSoFar.plus(paymentAmount);
-      const isFullyPaid = newAmountPaid.gte(totalPayable);
+      const newAmountPaid = Math.round((amountPaidSoFar.toNumber() + roundedPayment) * 100) / 100;
+      const isFullyPaid = Math.round((totalPayable.toNumber() - newAmountPaid) * 100) / 100 <= 0.01;
 
       // 1. Mark PackingItem as PAID/PARTIALLY_PAID
       await tx.packingItem.update({
         where: { id: data.packingItemId },
         data: { 
-          amountPaid: newAmountPaid.toNumber(),
+          amountPaid: newAmountPaid,
           status: isFullyPaid ? 'PAID' : 'PARTIALLY_PAID',
           fullyPaidAt: isFullyPaid ? new Date() : null
         }
@@ -558,7 +499,7 @@ export class AccountingService {
             supplierId: item.supplierId,
             packingItemId: item.id,
             bankId: data.bankId,
-            notes: `Cashier Partial Payment for Packing Bags: ${item.brandName} (${Number(item.quantityBags)} bags @ ${item.godown.name}). ${data.notes ?? ''}`.trim(),
+            notes: `Cashier Payment for Packing Bags: ${item.brandName} (${originalBags} bags @ ${item.godown.name}). ${data.notes ?? ''}`.trim(),
             userId: data.userId
           }
         });

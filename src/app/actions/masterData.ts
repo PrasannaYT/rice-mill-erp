@@ -23,7 +23,7 @@ async function checkAuth() {
   if (!session) {
     throw new Error("Unauthorized");
   }
-  if (session.user.role !== 'ADMIN' && session.user.role !== 'MANAGER') {
+  if (!['ADMIN', 'MANAGER', 'MILL_OWNER', 'SUPER_ADMIN'].includes(session.user.role)) {
     throw new Error("Forbidden: Insufficient privileges");
   }
   return session;
@@ -116,7 +116,7 @@ const farmerUpdateSchema = farmerCreateSchema.extend({ id: z.string().min(1, "ID
 
 // --- GODOWN ACTIONS ---
 
-export async function createGodownAction(formData: FormData): Promise<{ id: string; name: string }> {
+export async function createGodownAction(formData: FormData): Promise<{ id: string; name: string; type: string }> {
   await checkAuth();
   const parsed = godownCreateSchema.safeParse(Object.fromEntries(formData.entries()));
   if (!parsed.success) throw new Error(parsed.error.issues[0].message);
@@ -125,7 +125,7 @@ export async function createGodownAction(formData: FormData): Promise<{ id: stri
     const item = await GodownRepository.create(parsed.data);
     revalidatePath('/admin/master-data/godowns');
     revalidatePath('/admin/master-data');
-    return { id: item.id, name: item.name };
+    return { id: item.id, name: item.name, type: item.type };
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : "Failed to create godown");
   }

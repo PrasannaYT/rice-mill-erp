@@ -192,8 +192,8 @@ export default function DailyExpenseLedger({
       if (categoryId && !categoryId.startsWith('cat-')) {
         formData.append('expenseCategoryId', categoryId);
       } else if (selectedCat) {
-        // Pass note as particulars with category name
-        formData.append('notes', `${particulars || 'Expense'} [Category: ${selectedCat.name}]`);
+        // Dynamic category: pass the name so the server action can find or create it
+        formData.append('expenseCategoryName', selectedCat.name);
       }
 
       if ((mode === 'BANK' || mode === 'UPI') && bankId) {

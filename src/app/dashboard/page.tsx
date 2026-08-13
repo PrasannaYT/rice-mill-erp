@@ -8,10 +8,11 @@ import {
   ShoppingCart, Landmark, PieChart,
   Settings, LogOut, AlertTriangle,
   Wheat, ChevronRight, TrendingUp, TrendingDown,
-  ClipboardList, Factory
+  ClipboardList, Factory, Wallet
 } from "lucide-react";
 import { ReportService } from "@/services/reportService";
 import { AppHeader } from "@/components/ui/AppHeader";
+import DashboardWelcomeWrapper from "@/components/DashboardWelcomeWrapper";
 import { getServerSession as gss } from "next-auth";
 
 export const metadata = {
@@ -27,9 +28,16 @@ export default async function DashboardPage() {
   }
 
   const role = session.user?.role;
+  const settings = await prisma.globalSetting.findMany();
+  
+  const isModuleEnabled = (key: string) => {
+    const s = settings.find(s => s.key === key);
+    return s ? s.value === 'true' : true;
+  };
 
   const modules = [
     {
+      id: 'MODULE_MASTER_DATA',
       title: "Master Data",
       desc: "Suppliers, customers & setup",
       href: "/admin/master-data",
@@ -37,19 +45,21 @@ export default async function DashboardPage() {
       accentColor: "#64748b",
       glowColor: "rgba(100,116,139,0.15)",
       borderColor: "rgba(100,116,139,0.4)",
-      allowedRoles: ['ADMIN', 'MANAGER']
+      allowedRoles: ['ADMIN', 'MANAGER', 'MILL_OWNER']
     },
     {
+      id: 'MODULE_PROCUREMENT',
       title: "Procurement",
-      desc: "Inbound paddy & weighbridge",
+      desc: "Inbound weighbridge & paddy purchase",
       href: "/operator/procurement",
       icon: Truck,
       accentColor: "#d97706",
       glowColor: "rgba(217,119,6,0.15)",
       borderColor: "rgba(217,119,6,0.4)",
-      allowedRoles: ['ADMIN', 'MANAGER', 'WEIGHBRIDGE_OPERATOR', 'ACCOUNTANT']
+      allowedRoles: ['ADMIN', 'MANAGER', 'WEIGHBRIDGE_OPERATOR', 'ACCOUNTANT', 'MILL_OWNER']
     },
     {
+      id: 'MODULE_INVENTORY',
       title: "Inventory",
       desc: "Godowns & stock levels",
       href: "/admin/inventory",
@@ -57,9 +67,10 @@ export default async function DashboardPage() {
       accentColor: "#0284c7",
       glowColor: "rgba(2,132,199,0.15)",
       borderColor: "rgba(2,132,199,0.4)",
-      allowedRoles: ['ADMIN', 'MANAGER', 'FLOOR_MANAGER']
+      allowedRoles: ['ADMIN', 'MANAGER', 'FLOOR_MANAGER', 'MILL_OWNER']
     },
     {
+      id: 'MODULE_SALES',
       title: "Sales & Dispatch",
       desc: "Invoicing & outbound",
       href: "/operator/sales",
@@ -67,9 +78,10 @@ export default async function DashboardPage() {
       accentColor: "#4f46e5",
       glowColor: "rgba(79,70,229,0.15)",
       borderColor: "rgba(79,70,229,0.4)",
-      allowedRoles: ['ADMIN', 'MANAGER', 'WEIGHBRIDGE_OPERATOR', 'ACCOUNTANT']
+      allowedRoles: ['ADMIN', 'MANAGER', 'WEIGHBRIDGE_OPERATOR', 'ACCOUNTANT', 'MILL_OWNER']
     },
     {
+      id: 'MODULE_CASHIER',
       title: "Cashier",
       desc: "Accounting & payments",
       href: "/operator/accounting",
@@ -77,51 +89,79 @@ export default async function DashboardPage() {
       accentColor: "#dc2626",
       glowColor: "rgba(220,38,38,0.15)",
       borderColor: "rgba(220,38,38,0.4)",
-      allowedRoles: ['ADMIN', 'MANAGER', 'ACCOUNTANT']
+      allowedRoles: ['ADMIN', 'MANAGER', 'ACCOUNTANT', 'MILL_OWNER']
     },
     {
-      title: "Hamali & Payroll",
+      id: 'MODULE_PAYROLL',
+      title: "Payroll",
       desc: "Wages & labor ledgers",
       href: "/operator/payroll",
       icon: Users,
       accentColor: "#7c3aed",
       glowColor: "rgba(124,58,237,0.15)",
       borderColor: "rgba(124,58,237,0.4)",
-      allowedRoles: ['ADMIN', 'MANAGER', 'ACCOUNTANT']
+      allowedRoles: ['ADMIN', 'MANAGER', 'ACCOUNTANT', 'MILL_OWNER']
     },
     {
-      title: "Reports & P&L",
-      desc: "Financial analytics",
-      href: "/admin/reports",
-      icon: PieChart,
-      accentColor: "#059669",
-      glowColor: "rgba(5,150,105,0.15)",
-      borderColor: "rgba(5,150,105,0.4)",
-      allowedRoles: ['ADMIN', 'MANAGER']
-    },
-    {
-      title: "Fleet & Vehicles",
+      id: 'MODULE_VEHICLES',
+      title: "Vehicles & Fleet",
       desc: "Vehicle compliance & costs",
       href: "/operator/vehicles",
       icon: Truck,
       accentColor: "#0d9488",
       glowColor: "rgba(13,148,136,0.15)",
       borderColor: "rgba(13,148,136,0.4)",
-      allowedRoles: ['ADMIN', 'MANAGER', 'WEIGHBRIDGE_OPERATOR']
+      allowedRoles: ['ADMIN', 'MANAGER', 'WEIGHBRIDGE_OPERATOR', 'MILL_OWNER']
     },
     {
+      id: 'MODULE_PERSONAL_DEBT',
+      title: "Personal Debt",
+      desc: "Private loans and EMIs",
+      href: "/admin/personal-debt",
+      icon: Wallet,
+      accentColor: "#f59e0b",
+      glowColor: "rgba(245,158,11,0.15)",
+      borderColor: "rgba(245,158,11,0.4)",
+      allowedRoles: ['ADMIN', 'MANAGER', 'MILL_OWNER']
+    },
+    {
+      id: 'MODULE_REPORTS',
+      title: "Report & P&L",
+      desc: "Financial analytics",
+      href: "/admin/reports",
+      icon: PieChart,
+      accentColor: "#be123c",
+      glowColor: "rgba(190,18,60,0.15)",
+      borderColor: "rgba(190,18,60,0.4)",
+      allowedRoles: ['ADMIN', 'MANAGER', 'MILL_OWNER']
+    },
+    {
+      id: 'MODULE_GOD_MODE',
+      title: "Super Admin Control Center",
+      desc: "God Mode: absolute system access",
+      href: "/admin/god-mode",
+      icon: AlertTriangle,
+      accentColor: "#e11d48",
+      glowColor: "rgba(225,29,72,0.15)",
+      borderColor: "rgba(225,29,72,0.4)",
+      allowedRoles: ['SUPER_ADMIN']
+    },
+    {
+      id: 'MODULE_USERS',
       title: "User Management",
       desc: "Roles & access control",
       href: "/admin/users",
       icon: Users,
-      accentColor: "#9333ea",
-      glowColor: "rgba(147,51,234,0.15)",
-      borderColor: "rgba(147,51,234,0.4)",
-      allowedRoles: ['ADMIN']
-    },
-  ];
+      accentColor: "#0891b2",
+      glowColor: "rgba(8,145,178,0.15)",
+      borderColor: "rgba(8,145,178,0.4)",
+      allowedRoles: ['ADMIN', 'MANAGER', 'MILL_OWNER', 'SUPER_ADMIN'],
+    }
+  ].filter(m => isModuleEnabled(m.id));
 
-  const allowedModules = modules.filter(m => m.allowedRoles.includes(role));
+  const allowedModules = role === 'SUPER_ADMIN' 
+    ? modules 
+    : modules.filter(m => m.allowedRoles.includes(role));
 
   const in15Days = new Date();
   in15Days.setDate(in15Days.getDate() + 15);
@@ -151,14 +191,15 @@ export default async function DashboardPage() {
   const firstName = session.user?.name?.split(' ')[0] ?? 'User';
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A]">
+    <DashboardWelcomeWrapper>
+      <div className="min-h-screen bg-[#0A0A0A]">
 
-      {/* Unified AppHeader — logo mode, no back button */}
-      <AppHeader
-        title=""
-        showBack={false}
-        showLogo={true}
-      />
+        {/* Unified AppHeader — logo mode, no back button */}
+        <AppHeader
+          title=""
+          showBack={false}
+          showLogo={true}
+        />
 
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
 
@@ -189,7 +230,7 @@ export default async function DashboardPage() {
         </div>
 
         {/* ── KPI STRIP ── */}
-        {pnl && (role === 'ADMIN' || role === 'MANAGER') && (
+        {pnl && (role === 'ADMIN' || role === 'MANAGER' || role === 'MILL_OWNER') && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
               {
@@ -293,5 +334,6 @@ export default async function DashboardPage() {
 
       </div>
     </div>
-  );
+  </DashboardWelcomeWrapper>
+);
 }

@@ -231,4 +231,91 @@ export class InventoryService {
       return destinationGodownId;
     });
   }
+
+  /**
+   * Adds Opening Stock for Paddy without affecting supplier ledgers.
+   */
+  static async addOpeningStock({
+    productId,
+    godownId,
+    numberOfBags,
+    perBagWeight,
+    ratePerBag,
+    userId
+  }: {
+    productId: string;
+    godownId: string;
+    numberOfBags: number;
+    perBagWeight: number;
+    ratePerBag: number;
+    userId: string;
+  }) {
+    const bags = new Decimal(numberOfBags);
+    const weightPerBag = new Decimal(perBagWeight);
+    const rateBag = new Decimal(ratePerBag);
+    
+    const totalWeight = bags.times(weightPerBag);
+    const totalValue = bags.times(rateBag);
+    const ratePerKg = totalWeight.gt(0) ? totalValue.dividedBy(totalWeight) : new Decimal(0);
+
+    return prisma.$transaction(async (tx) => {
+      // Find or create SYSTEM supplier for Opening Stock
+      let systemSupplier = await tx.supplier.findFirst({
+        where: { name: 'OPENING STOCK', category: 'SYSTEM' }
+      });
+
+      if (!systemSupplier) {
+        systemSupplier = await tx.supplier.create({
+          data: {
+            name: 'OPENING STOCK',
+            category: 'SYSTEM',
+          }
+        });
+      }
+
+      // Create a ProcurementBatch with FINALIZED status
+      const batch = await tx.procurementBatch.create({
+        data: {
+          supplierId: systemSupplier.id,
+          godownId,
+          productId,
+          grossWeight: totalWeight,
+          netWeight: totalWeight,
+          normalizedWeight: totalWeight,
+          numberOfBags: bags,
+          perBagWeight: weightPerBag,
+          farmerBagRate: rateBag,
+          ratePerKg: ratePerKg,
+          totalPayable: totalValue,
+          status: 'FINALIZED',
+        }
+      });
+
+      // Create Lot
+      const lot = await tx.lot.create({
+        data: {
+          productId,
+          godownId,
+          procurementId: batch.id,
+          initialQuantity: totalWeight,
+          currentQuantity: totalWeight,
+          status: 'ACTIVE'
+        }
+      });
+
+      // Log Movement
+      await tx.stockMovement.create({
+        data: {
+          productId,
+          toGodownId: godownId,
+          quantity: totalWeight,
+          type: 'OPENING_STOCK',
+          userId,
+          referenceId: lot.id
+        }
+      });
+
+      return batch;
+    });
+  }
 }

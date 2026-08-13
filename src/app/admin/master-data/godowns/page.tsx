@@ -16,7 +16,7 @@ import AddGodownFAB from "@/components/AddGodownFAB";
 export default async function GodownsPage({ searchParams }: { searchParams: Promise<{ edit?: string, q?: string }> }) {
   const params = await searchParams;
   const session = await getServerSession(authOptions);
-  if (!session || (session.user?.role !== 'ADMIN' && session.user?.role !== 'MANAGER')) redirect('/dashboard');
+  if (!session || (session.user?.role !== 'ADMIN' && session.user?.role !== 'MANAGER' && session.user?.role !== 'MILL_OWNER' && session.user?.role !== 'SUPER_ADMIN')) redirect('/dashboard');
 
   let godowns = await GodownRepository.list();
   

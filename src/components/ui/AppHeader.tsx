@@ -62,6 +62,7 @@ export function AppHeader({
   const name = session?.user?.name ?? '';
 
   const [currentDate, setCurrentDate] = useState<string>('');
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
 
   useEffect(() => {
     const formatter = new Intl.DateTimeFormat('en-US', {
@@ -175,7 +176,7 @@ export function AppHeader({
               </span>
             )}
             <button
-              onClick={() => void signOut({ callbackUrl: '/login' })}
+              onClick={() => setShowSignOutConfirm(true)}
               title="Sign out"
               className="flex items-center gap-1.5 text-neutral-500 hover:text-red-400 text-xs font-bold uppercase tracking-wide transition-colors"
             >
@@ -186,7 +187,7 @@ export function AppHeader({
 
           {/* Sign out icon only (mobile) */}
           <button
-            onClick={() => void signOut({ callbackUrl: '/login' })}
+            onClick={() => setShowSignOutConfirm(true)}
             className="sm:hidden p-2 text-neutral-600 hover:text-red-400 transition-colors"
             title="Sign out"
           >
@@ -197,6 +198,56 @@ export function AppHeader({
 
       {/* Thin gold progress bar accent */}
       <div className="h-[2px] bg-gradient-to-r from-[#F5A623]/0 via-[#F5A623]/40 to-[#F5A623]/0" />
+
+      {/* SIGN OUT CONFIRMATION MODAL */}
+      {showSignOutConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-up">
+          <div className="bg-[#121212] w-full max-w-sm sm:max-w-md rounded-2xl border border-red-500/40 overflow-hidden shadow-2xl p-6 space-y-5">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center text-red-400 shrink-0">
+                <LogOut className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-display font-black text-lg text-white uppercase tracking-wider">Confirm Sign Out</h3>
+                <p className="text-xs text-neutral-400 mt-0.5">Are you sure you want to log out of Rice Mill ERP?</p>
+              </div>
+            </div>
+
+            {name && (
+              <div className="bg-neutral-900/90 p-3 rounded-xl border border-neutral-800 flex justify-between items-center text-xs">
+                <span className="text-neutral-400 font-medium">Logged in as:</span>
+                <span className="font-bold text-white flex items-center gap-2">
+                  <span>{name}</span>
+                  {role && <span className="text-[10px] text-[#F5A623] font-mono font-bold">({ROLE_SHORT[role] || role})</span>}
+                </span>
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowSignOutConfirm(false)}
+                className="flex-1 py-3 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 font-bold uppercase text-xs rounded-xl border border-neutral-700 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    sessionStorage.removeItem('erpsplash_shown');
+                  }
+                  void signOut({ callbackUrl: '/login' });
+                }}
+                className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white font-black uppercase tracking-wider text-xs rounded-xl shadow-lg transition-colors flex items-center justify-center gap-2"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Yes, Sign Out</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 }

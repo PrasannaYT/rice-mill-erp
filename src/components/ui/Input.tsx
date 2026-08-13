@@ -75,14 +75,19 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
     return (
       <div className="w-full">
         {label && <label htmlFor={selectId} className="label-brutal">{label}</label>}
-        <select
-          ref={ref}
-          id={selectId}
-          className={cn('input-brutal sm:min-h-[48px] min-h-[56px] text-[16px] appearance-none cursor-pointer', className)}
-          {...props}
-        >
-          {children}
-        </select>
+        <div className="relative">
+          <select
+            ref={ref}
+            id={selectId}
+            className={cn('input-brutal sm:min-h-[48px] min-h-[56px] text-[16px] appearance-none cursor-pointer pr-10', className)}
+            {...props}
+          >
+            {children}
+          </select>
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-400">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+          </div>
+        </div>
         {error && <p className="mt-1 text-xs text-red-600 font-semibold">{error}</p>}
       </div>
     );

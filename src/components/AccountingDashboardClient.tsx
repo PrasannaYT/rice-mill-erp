@@ -10,6 +10,34 @@ import ManualJournalForm from '@/components/ManualJournalForm';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 
+function isProcurementRiceBatch(batch: any): boolean {
+  if (!batch) return false;
+
+  // 1. Explicit Paddy signals (Farmer attached, moisture metrics, broker commission)
+  if (batch.farmerId || (batch.farmer && batch.farmer.id)) return false;
+  if (batch.beforeDryingMoisture != null || batch.dryingShortage != null) return false;
+  if (batch.brokerCommissionRate != null || (batch.brokerCommissionTotal != null && Number(batch.brokerCommissionTotal) > 0)) return false;
+
+  const cat = (batch.product?.category || '').toUpperCase();
+  if (cat === 'RAW_MATERIAL' || cat === 'PADDY') return false;
+
+  // 2. Explicit Rice signals
+  const suppCat = (batch.supplier?.category || '').toUpperCase();
+  if (suppCat === 'RICE_MILL' || suppCat === 'RICE_SUPPLIER' || suppCat === 'RICE_VENDOR') return true;
+  if (cat.includes('FINISHED') || cat.includes('RICE')) return true;
+
+  const pName = (batch.product?.name || '').toUpperCase();
+  if (pName.includes('RICE')) return true;
+
+  const gType = (batch.godown?.type || '').toUpperCase();
+  if (gType === 'RICE') return true;
+
+  // 3. Direct Rice Procurement signature: Supplier batch without farmer or paddy broker tag
+  if (suppCat !== 'PADDY_BROKER' && !batch.farmerId) return true;
+
+  return false;
+}
+
 export default function AccountingDashboardClient({
   totalAR,
   totalAP,
@@ -142,8 +170,10 @@ export default function AccountingDashboardClient({
             <tbody className="divide-y divide-neutral-200">
               {transactions.map((tx: any) => {
                 const isReceipt = tx.type === 'RECEIPT';
-                const entityName = tx.customer?.name || tx.supplier?.name || tx.expenseCategory?.name || 'Unknown';
-                const entityType = tx.customer ? 'Customer' : tx.supplier ? 'Supplier' : tx.expenseCategory ? 'Expense' : '';
+                const isRiceProcurement = isProcurementRiceBatch(tx.procurementBatch);
+                const categoryLabel = tx.procurementBatch ? (isRiceProcurement ? 'Rice' : 'Paddy') : tx.salesInvoice ? 'Sales' : tx.packingItem ? 'Packing' : tx.expenseCategory ? 'Expense' : 'General';
+                const entityName = tx.customer?.name || tx.supplier?.name || tx.expenseCategory?.name || 'Manual Transaction';
+                const entityType = tx.customer ? 'Customer' : tx.supplier ? 'Supplier' : tx.expenseCategory ? 'Expense Category' : 'General Ledger';
                 
                 return (
                   <tr key={tx.id} className="hover:bg-[var(--surface-2)] transition-colors">
@@ -151,9 +181,14 @@ export default function AccountingDashboardClient({
                       {format(new Date(tx.createdAt), "MMM dd, yyyy HH:mm")}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-bold">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${isReceipt ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
-                        {tx.type}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${isReceipt ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                          {tx.type}
+                        </span>
+                        <span className="px-2 inline-flex text-xs leading-5 font-black uppercase rounded bg-neutral-200 text-neutral-800 dark:bg-neutral-800 dark:text-neutral-300">
+                          {categoryLabel}
+                        </span>
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-[var(--text)]">{entityName}</div>
@@ -353,7 +388,7 @@ export default function AccountingDashboardClient({
                       id: recordId,
                       isCompleted,
                       entityName: tx.customer?.name || tx.supplier?.name || tx.expenseCategory?.name || 'Manual Transaction',
-                      type: tx.procurementBatch ? 'Procurement' : tx.salesInvoice ? 'Sales' : tx.packingItem ? 'Packing' : tx.expenseCategory ? 'Expense' : 'Manual',
+                      type: tx.procurementBatch ? 'Paddy' : tx.salesInvoice ? 'Sales' : tx.packingItem ? 'Packing' : tx.expenseCategory ? 'Expense' : 'Manual',
                       transactions: []
                     };
                   }

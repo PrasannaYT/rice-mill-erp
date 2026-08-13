@@ -24,12 +24,15 @@ import {
   ChevronDown,
   Sparkles,
   Info,
-  CheckCircle2
+  CheckCircle2,
+  Settings
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import MillingConversionModal from './MillingConversionModal';
+import ExistingPaddyStockModal from './ExistingPaddyStockModal';
 import Link from 'next/link';
 import { AppHeader } from '@/components/ui/AppHeader';
+import SparesScrapTab from './SparesScrapTab';
 
 interface StockMovement {
   id: string;
@@ -89,6 +92,8 @@ interface InventoryDashboardClientProps {
   }[];
   stockMovements?: StockMovement[];
   editPackingId?: string;
+  spareParts?: any[];
+  scrapEntries?: any[];
 }
 
 export default function InventoryDashboardClient({
@@ -97,14 +102,66 @@ export default function InventoryDashboardClient({
   allLots,
   packingItems,
   stockMovements = [],
-  editPackingId
+  editPackingId,
+  spareParts = [],
+  scrapEntries = []
 }: InventoryDashboardClientProps) {
   const router = useRouter();
 
-  // Navigation state: Segmented Tabs ('paddy' | 'rice' | 'bags')
-  const [activeTab, setActiveTab] = useState<'paddy' | 'rice' | 'bags'>('paddy');
+  // Navigation state: Segmented Tabs ('paddy' | 'rice' | 'bags' | 'spares')
+  const [activeTab, setActiveTab] = useState<'paddy' | 'rice' | 'bags' | 'spares'>('paddy');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
+
+  // Grouped Packaging Items by Brand Name and Weight Category (Capacity KG)
+  const groupedPackingItems = useMemo(() => {
+    const activeItems = (packingItems || []).filter(item => Number(item.quantityBags) > 0);
+    
+    const map = new Map<string, {
+      key: string;
+      brandName: string;
+      capacityKg: string;
+      totalBags: number;
+      totalValue: number;
+      godowns: string[];
+      itemIds: string[];
+      items: typeof activeItems;
+    }>();
+
+    for (const item of activeItems) {
+      const brand = (item.brandName || 'Branded Bag').trim();
+      const capacity = (item.capacityKg || '0').toString().trim();
+      const groupKey = `${brand.toUpperCase()}_${capacity}`;
+
+      const bags = Number(item.quantityBags) || 0;
+      const rate = Number(item.perBagRate) || 0;
+      const val = bags * rate;
+      const gName = item.godown?.name || 'Main Storage';
+
+      const existing = map.get(groupKey) || {
+        key: groupKey,
+        brandName: brand,
+        capacityKg: capacity,
+        totalBags: 0,
+        totalValue: 0,
+        godowns: [],
+        itemIds: [],
+        items: []
+      };
+
+      existing.totalBags += bags;
+      existing.totalValue += val;
+      if (!existing.godowns.includes(gName)) {
+        existing.godowns.push(gName);
+      }
+      existing.itemIds.push(item.id);
+      existing.items.push(item);
+
+      map.set(groupKey, existing);
+    }
+
+    return Array.from(map.values());
+  }, [packingItems]);
 
   // Supplier Provenance Bottom Sheet state
   const [activeSupplierSheet, setActiveSupplierSheet] = useState<{
@@ -126,6 +183,9 @@ export default function InventoryDashboardClient({
     productCategory?: string;
     subtitle?: string;
   }>({ isOpen: false, title: '' });
+
+  // Opening Stock Modal
+  const [isOpeningStockModalOpen, setIsOpeningStockModalOpen] = useState(false);
 
   // Monitor Network Status
   useEffect(() => {
@@ -160,11 +220,15 @@ export default function InventoryDashboardClient({
 
   const riceGodowns = useMemo(() => {
     return godowns.filter(g => {
-      if ('type' in g && g.type) {
-        return g.type === 'RICE';
-      }
+      const gType = (g.type || '').toUpperCase();
+      if (gType === 'RICE') return true;
       const name = g.name.toLowerCase();
-      return name.includes('rice') || name.includes('finish') || name.includes('main') || name.includes('central');
+      if (name.includes('rice') || name.includes('finish') || name.includes('central') || name.includes('main')) return true;
+      return g.lots.some(l => {
+        const cat = (l.product?.category || '').toUpperCase();
+        const pName = (l.product?.name || '').toLowerCase();
+        return cat.includes('FINISHED') || cat.includes('RICE') || pName.includes('rice');
+      });
     });
   }, [godowns]);
 
@@ -179,10 +243,17 @@ export default function InventoryDashboardClient({
   }, [paddyGodowns]);
 
   const totalRiceStockKg = useMemo(() => {
-    return riceGodowns.reduce((sum, g) => {
-      return sum + g.lots.reduce((lSum: number, l: any) => lSum + Number(l.currentQuantity), 0);
+    return godowns.reduce((sum, g) => {
+      return sum + g.lots.reduce((lSum: number, l: any) => {
+        const cat = (l.product?.category || '').toUpperCase();
+        const pName = (l.product?.name || '').toLowerCase();
+        const gType = (g.type || '').toUpperCase();
+        const gName = g.name.toLowerCase();
+        const isRice = cat.includes('FINISHED') || cat.includes('RICE') || pName.includes('rice') || gType === 'RICE' || gName.includes('rice') || gName.includes('finish');
+        return isRice ? lSum + Number(l.currentQuantity) : lSum;
+      }, 0);
     }, 0);
-  }, [riceGodowns]);
+  }, [godowns]);
 
   const totalBagsInStock = useMemo(() => {
     return packingItems.reduce((sum, item) => sum + (Number(item.quantityBags) || 0), 0);
@@ -241,7 +312,7 @@ export default function InventoryDashboardClient({
         {/* ========================================================================= */}
         {/* 2. SEGMENTED NAVIGATION TABS */}
         {/* ========================================================================= */}
-        <nav aria-label="Inventory View Sections" className="grid grid-cols-3 gap-2 p-1.5 bg-neutral-900 border border-neutral-800 rounded-2xl shadow-lg relative">
+        <nav aria-label="Inventory View Sections" className="grid grid-cols-4 gap-2 p-1.5 bg-neutral-900 border border-neutral-800 rounded-2xl shadow-lg relative">
           <button
             onClick={() => setActiveTab('paddy')}
             className={`py-3.5 px-2 rounded-xl font-display font-black text-xs uppercase tracking-wider transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 border focus-visible:ring-2 focus-visible:ring-[#F5A623] focus-visible:outline-none min-h-[44px] relative z-10 ${
@@ -251,7 +322,7 @@ export default function InventoryDashboardClient({
             }`}
           >
             <span className="text-base sm:text-sm">🌾</span>
-            <span className="truncate">Paddy ({displayPaddyGodowns.length})</span>
+            <span className="truncate text-[10px] sm:text-xs">Paddy ({displayPaddyGodowns.length})</span>
           </button>
 
           <button
@@ -263,7 +334,7 @@ export default function InventoryDashboardClient({
             }`}
           >
             <span className="text-base sm:text-sm">🍚</span>
-            <span className="truncate">Rice ({displayRiceGodowns.length})</span>
+            <span className="truncate text-[10px] sm:text-xs">Rice ({displayRiceGodowns.length})</span>
           </button>
 
           <button
@@ -274,8 +345,22 @@ export default function InventoryDashboardClient({
                 : 'bg-transparent text-neutral-400 border-transparent hover:text-white'
             }`}
           >
-            <span className="text-base sm:text-sm">📦</span>
-            <span className="truncate">Bags ({packingItems.length})</span>
+            <Package className="w-5 h-5 sm:w-4 sm:h-4" />
+            <span className="truncate text-[10px] sm:text-xs">PACKAGING</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('spares')}
+            className={`py-3.5 px-2 rounded-xl font-display font-black text-xs uppercase tracking-wider transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 border focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:outline-none min-h-[44px] relative z-10 ${
+              activeTab === 'spares'
+                ? 'bg-emerald-500 text-black border-emerald-500 shadow-md scale-[1.02]'
+                : 'bg-transparent text-neutral-400 border-transparent hover:text-white'
+            }`}
+            aria-selected={activeTab === 'spares'}
+            role="tab"
+          >
+            <Settings className="w-5 h-5 sm:w-4 sm:h-4" />
+            <span className="truncate text-[10px] sm:text-xs">SPARES</span>
           </button>
         </nav>
 
@@ -363,14 +448,24 @@ export default function InventoryDashboardClient({
                     <span>🌾</span> Paddy Storage Godowns ({displayPaddyGodowns.length})
                   </h2>
 
-                  <button
-                    type="button"
-                    onClick={() => openConversionModal()}
-                    className="w-full sm:w-auto px-5 py-3 bg-[#F5A623] hover:bg-[#d98e19] text-black font-display font-black text-xs uppercase tracking-wider rounded-xl shadow-lg border-2 border-black flex items-center justify-center gap-2 active:scale-95 transition-all min-h-[48px] focus-visible:ring-2 focus-visible:ring-white"
-                  >
-                    <Factory className="w-4 h-4 shrink-0" />
-                    <span>[ PROCESS MILLING BATCH ]</span>
-                  </button>
+                  <div className="flex gap-2 w-full sm:w-auto">
+                    <button
+                      type="button"
+                      onClick={() => setIsOpeningStockModalOpen(true)}
+                      className="flex-1 sm:flex-none px-4 py-3 bg-neutral-800 hover:bg-neutral-700 text-white font-display font-bold text-[10px] sm:text-xs uppercase tracking-wider rounded-xl shadow-lg border-2 border-neutral-700 flex items-center justify-center gap-2 active:scale-95 transition-all min-h-[48px] focus-visible:ring-2 focus-visible:ring-white"
+                    >
+                      <Plus className="w-4 h-4 shrink-0" />
+                      <span>[ ADD STOCK ]</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openConversionModal()}
+                      className="flex-1 sm:flex-none px-4 py-3 bg-[#F5A623] hover:bg-[#d98e19] text-black font-display font-black text-[10px] sm:text-xs uppercase tracking-wider rounded-xl shadow-lg border-2 border-black flex items-center justify-center gap-2 active:scale-95 transition-all min-h-[48px] focus-visible:ring-2 focus-visible:ring-white"
+                    >
+                      <Factory className="w-4 h-4 shrink-0" />
+                      <span>[ MILLING BATCH ]</span>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -692,7 +787,7 @@ export default function InventoryDashboardClient({
               >
                 <div className="flex justify-between items-center">
                   <h2 className="text-xs font-black uppercase tracking-wider text-neutral-400 flex items-center gap-2">
-                    <span>📦</span> Branded Packaging Bags ({packingItems.length})
+                    <span>📦</span> Branded Packaging Bags ({groupedPackingItems.length})
                   </h2>
 
                   <Link href="/operator/procurement?tab=packaging">
@@ -703,60 +798,82 @@ export default function InventoryDashboardClient({
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {packingItems.map((item) => {
-                    const bagsCount = Number(item.quantityBags) || 0;
-                    const isLowStock = bagsCount < 500;
-                    const totalItemVal = bagsCount * Number(item.perBagRate);
+                  {groupedPackingItems.length === 0 ? (
+                    <div className="col-span-2 p-8 bg-[#1A1A1A] border-2 border-dashed border-neutral-800 rounded-2xl text-center text-xs font-bold text-neutral-500 uppercase">
+                      No active packaging bags in inventory
+                    </div>
+                  ) : (
+                    groupedPackingItems.map((group) => {
+                      const isLowStock = group.totalBags < 200;
 
-                    return (
-                      <article 
-                        key={item.id}
-                        onClick={() => openAuditTrail(`${item.brandName} Packaging History`, item.id, `Stored in ${item.godown?.name}`, 'PACKAGING_MATERIAL')}
-                        className="p-5 sm:p-6 bg-[#1A1A1A] border-2 border-[#F5A623]/40 rounded-2xl relative overflow-hidden cursor-pointer hover:border-[#F5A623] active:scale-[0.98] transition-all shadow-xl"
-                        tabIndex={0}
-                      >
-                        {/* WATERMARK EFFECT */}
-                        <Tags className="w-32 h-32 text-[#F5A623] opacity-15 pointer-events-none absolute -bottom-4 -right-4" />
+                      return (
+                        <article 
+                          key={group.key}
+                          onClick={() => openAuditTrail(`${group.brandName} (${group.capacityKg} KG) Packaging History`, group.itemIds[0], `Stored in ${group.godowns.join(', ')}`, 'PACKAGING_MATERIAL')}
+                          className="p-5 sm:p-6 bg-[#1A1A1A] border-2 border-[#F5A623]/40 rounded-2xl relative overflow-hidden cursor-pointer hover:border-[#F5A623] active:scale-[0.98] transition-all shadow-xl"
+                          tabIndex={0}
+                        >
+                          {/* WATERMARK EFFECT */}
+                          <Tags className="w-32 h-32 text-[#F5A623] opacity-15 pointer-events-none absolute -bottom-4 -right-4" />
 
-                        <div className="flex justify-between items-start mb-3 relative z-10">
-                          <div>
-                            <h3 className="font-display font-black text-lg uppercase tracking-wider text-white">
-                              {item.brandName} ({item.capacityKg} KG)
-                            </h3>
-                            <p className="text-xs text-neutral-400 font-bold">Godown: {item.godown?.name || 'Main Storage'}</p>
+                          <div className="flex justify-between items-start mb-3 relative z-10">
+                            <div>
+                              <h3 className="font-display font-black text-lg uppercase tracking-wider text-white flex items-center gap-2">
+                                <span>{group.brandName}</span>
+                                <span className="text-xs px-2.5 py-0.5 bg-[#F5A623]/20 text-[#F5A623] rounded-md font-mono font-bold border border-[#F5A623]/30">
+                                  {group.capacityKg} KG
+                                </span>
+                              </h3>
+                              <p className="text-xs text-neutral-400 font-bold mt-1">
+                                Godown: {group.godowns.join(', ')}
+                              </p>
+                            </div>
+
+                            {/* LOW STOCK ALERT BADGE */}
+                            {isLowStock ? (
+                              <span className="px-3 py-1 bg-red-500/20 text-red-400 border border-red-500/50 rounded-full font-black text-xs animate-pulse flex items-center gap-1">
+                                🚨 LOW STOCK
+                              </span>
+                            ) : (
+                              <span className="px-3 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 rounded-full font-bold text-xs">
+                                In Stock
+                              </span>
+                            )}
                           </div>
 
-                          {/* LOW STOCK ALERT BADGE */}
-                          {isLowStock ? (
-                            <span className="px-3 py-1 bg-red-500/20 text-red-400 border border-red-500/50 rounded-full font-black text-xs animate-pulse flex items-center gap-1">
-                              🚨 LOW STOCK
-                            </span>
-                          ) : (
-                            <span className="px-3 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 rounded-full font-bold text-xs">
-                              In Stock
-                            </span>
-                          )}
-                        </div>
+                          <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-neutral-800 relative z-10">
+                            <div>
+                              <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest block">Total Available</span>
+                              <span className="font-mono font-black text-xl text-[#F5A623]">
+                                {group.totalBags.toLocaleString()} <span className="text-xs text-neutral-400 font-normal">Bags</span>
+                              </span>
+                            </div>
 
-                        <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-neutral-800 relative z-10">
-                          <div>
-                            <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest block">Available Quantity</span>
-                            <span className="font-mono font-black text-xl text-[#F5A623]">
-                              {bagsCount.toLocaleString()} <span className="text-xs text-neutral-400 font-normal">Bags</span>
-                            </span>
+                            <div>
+                              <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest block">Estimated Value</span>
+                              <span className="font-mono font-black text-xl text-emerald-400">
+                                ₹ {group.totalValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
                           </div>
-
-                          <div>
-                            <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest block">Estimated Value</span>
-                            <span className="font-mono font-black text-xl text-emerald-400">
-                              ₹ {totalItemVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                            </span>
-                          </div>
-                        </div>
-                      </article>
-                    );
-                  })}
+                        </article>
+                      );
+                    })
+                  )}
                 </div>
+              </motion.section>
+            )}
+
+            {activeTab === 'spares' && (
+              <motion.section 
+                key="spares-tab"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2 }}
+                aria-label="Spares and Scrap Inventory" 
+              >
+                <SparesScrapTab spareParts={spareParts} scrapEntries={scrapEntries} />
               </motion.section>
             )}
           </AnimatePresence>
@@ -879,7 +996,37 @@ export default function InventoryDashboardClient({
                   stockMovements
                     .filter(m => {
                       if (activeAuditSheet.productId) return m.productId === activeAuditSheet.productId;
-                      if (activeAuditSheet.productCategory) return m.productCategory === activeAuditSheet.productCategory;
+                      if (activeAuditSheet.productCategory) {
+                        const cat = (m.productCategory || '').toUpperCase();
+                        const reqCat = activeAuditSheet.productCategory.toUpperCase();
+                        const pName = (m.productName || '').toUpperCase();
+                        const toGodown = (m.toGodownName || '').toUpperCase();
+                        const fromGodown = (m.fromGodownName || '').toUpperCase();
+
+                        if (reqCat.includes('FINISHED') || reqCat.includes('RICE')) {
+                          return cat.includes('FINISHED') || 
+                                 cat.includes('RICE') || 
+                                 pName.includes('RICE') || 
+                                 pName.includes('RNR') || 
+                                 pName.includes('BPT') || 
+                                 pName.includes('HMT') || 
+                                 pName.includes('SONA') || 
+                                 pName.includes('BASMATI') || 
+                                 pName.includes('PARBOILED') || 
+                                 pName.includes('STEAM') || 
+                                 pName.includes('RAW RICE') || 
+                                 toGodown.includes('RICE') || 
+                                 fromGodown.includes('RICE');
+                        }
+                        if (reqCat.includes('RAW') || reqCat.includes('PADDY')) {
+                          return cat.includes('RAW') || 
+                                 cat.includes('PADDY') || 
+                                 pName.includes('PADDY') || 
+                                 toGodown.includes('PADDY') || 
+                                 fromGodown.includes('PADDY');
+                        }
+                        return cat === reqCat;
+                      }
                       return true;
                     })
                     .map((m, idx) => (
@@ -916,6 +1063,13 @@ export default function InventoryDashboardClient({
         lots={allLots}
         initialGodownId={selectedPaddyGodownId}
         initialProductId={selectedPaddyProductId}
+      />
+
+      <ExistingPaddyStockModal
+        isOpen={isOpeningStockModalOpen}
+        onClose={() => setIsOpeningStockModalOpen(false)}
+        paddyProducts={paddyProducts}
+        godowns={godowns}
       />
 
     </main>

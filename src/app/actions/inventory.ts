@@ -10,7 +10,7 @@ async function checkAuth() {
   if (!session) {
     throw new Error("Unauthorized");
   }
-  const allowedRoles = ['ADMIN', 'MANAGER', 'FLOOR_MANAGER'];
+  const allowedRoles = ['ADMIN', 'MANAGER', 'FLOOR_MANAGER', 'MILL_OWNER', 'SUPER_ADMIN'];
   if (!allowedRoles.includes(session.user.role)) {
     throw new Error("Forbidden: Insufficient privileges");
   }
@@ -50,6 +50,35 @@ export async function convertPaddyToRiceAction(formData: FormData) {
 
   revalidatePath('/admin/inventory');
   revalidatePath('/operator/milling');
+  revalidatePath('/dashboard');
+  revalidatePath('/admin/reports');
+}
+
+export async function addPaddyOpeningStockAction(formData: FormData) {
+  const session = await checkAuth();
+
+  const productId = formData.get('productId') as string;
+  const godownId = formData.get('godownId') as string;
+  const numberOfBags = parseFloat(formData.get('numberOfBags') as string) || 0;
+  const perBagWeight = parseFloat(formData.get('perBagWeight') as string) || 0;
+  const ratePerBag = parseFloat(formData.get('ratePerBag') as string) || 0;
+
+  if (!productId) throw new Error("Product is required");
+  if (!godownId) throw new Error("Godown is required");
+  if (numberOfBags <= 0) throw new Error("Number of bags must be positive");
+  if (perBagWeight <= 0) throw new Error("Weight per bag must be positive");
+  if (ratePerBag <= 0) throw new Error("Rate per bag must be positive");
+
+  await InventoryService.addOpeningStock({
+    productId,
+    godownId,
+    numberOfBags,
+    perBagWeight,
+    ratePerBag,
+    userId: session.user.id
+  });
+
+  revalidatePath('/admin/inventory');
   revalidatePath('/dashboard');
   revalidatePath('/admin/reports');
 }

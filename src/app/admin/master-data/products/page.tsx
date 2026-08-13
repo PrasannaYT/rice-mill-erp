@@ -24,7 +24,7 @@ export default async function ProductsMasterDataPage({ searchParams }: { searchP
   const params = await searchParams;
   const session = await getServerSession(authOptions);
 
-  if (!session || (session.user?.role !== 'ADMIN' && session.user?.role !== 'MANAGER')) {
+  if (!session || (session.user?.role !== 'ADMIN' && session.user?.role !== 'MANAGER' && session.user?.role !== 'MILL_OWNER' && session.user?.role !== 'SUPER_ADMIN')) {
     redirect('/dashboard');
   }
 

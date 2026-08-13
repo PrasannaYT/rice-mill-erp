@@ -20,6 +20,8 @@ model User {
   millingSessions MillingSession[]
   payments        PaymentTransaction[]
   invoices        SalesInvoice[]
+  deletedAt        DateTime?
+  sessions         UserSession[]
 }
 
 model AuditLog {
@@ -36,6 +38,7 @@ model AuditLog {
 
   @@index([entityId])
   @@index([createdAt])
+  isReverted       Boolean  @default(false)
 }
 
 model Supplier {
@@ -53,6 +56,7 @@ model Supplier {
   packingItems PackingItem[]
   payments     PaymentTransaction[]
   batches      ProcurementBatch[]
+  deletedAt        DateTime?
 }
 
 model Farmer {
@@ -69,6 +73,7 @@ model Farmer {
   batches   ProcurementBatch[]
 
   @@index([brokerId])
+  deletedAt        DateTime?
 }
 
 model Customer {
@@ -83,6 +88,7 @@ model Customer {
   ledgers   LedgerEntry[]
   payments  PaymentTransaction[]
   invoices  SalesInvoice[]
+  deletedAt        DateTime?
 }
 
 model Product {
@@ -98,6 +104,7 @@ model Product {
   movements          StockMovement[]
 
   @@index([category])
+  deletedAt        DateTime?
 }
 
 model Godown {
@@ -112,14 +119,16 @@ model Godown {
   invoiceItems  SalesInvoiceItem[]
   movementsFrom StockMovement[]    @relation("MovementFrom")
   movementsTo   StockMovement[]    @relation("MovementTo")
+  deletedAt        DateTime?
 }
 
 model PackingItem {
   id           String               @id @default(cuid())
-  brandName    String
-  capacityKg   Decimal
-  quantityBags Decimal              @default(0)
-  perBagRate   Decimal
+  brandName           String
+  capacityKg          Decimal
+  quantityBags        Decimal              @default(0)
+  initialQuantityBags Decimal              @default(0)
+  perBagRate          Decimal
   godownId     String
   hsnCode      String?
   createdAt    DateTime             @default(now())
@@ -135,6 +144,7 @@ model PackingItem {
   @@index([godownId])
   @@index([supplierId])
   @@index([status])
+  deletedAt        DateTime?
 }
 
 model Vehicle {
@@ -158,6 +168,7 @@ model Vehicle {
 
   @@index([type])
   @@index([assignedDriverId])
+  deletedAt        DateTime?
 }
 
 model Laborer {
@@ -172,6 +183,7 @@ model Laborer {
   assignedVehicles Vehicle[]            @relation("VehicleDriver")
 
   @@index([type])
+  deletedAt        DateTime?
 }
 
 model Bank {
@@ -181,6 +193,7 @@ model Bank {
   ifscCode      String?
   balance       Decimal              @default(0.00)
   payments      PaymentTransaction[]
+  deletedAt        DateTime?
 }
 
 model ExpenseCategory {
@@ -192,6 +205,7 @@ model ExpenseCategory {
   payments    PaymentTransaction[]
 
   @@index([type])
+  deletedAt        DateTime?
 }
 
 model ProcurementBatch {
@@ -239,6 +253,7 @@ model ProcurementBatch {
   @@index([godownId])
   @@index([productId])
   @@index([vehicleId])
+  deletedAt        DateTime?
 }
 
 model LedgerEntry {
@@ -269,6 +284,7 @@ model LedgerEntry {
   @@index([customerId, createdAt])
   @@index([vehicleId])
   @@index([expenseCategoryId])
+  deletedAt        DateTime?
 }
 
 model Lot {
@@ -291,6 +307,7 @@ model Lot {
   @@index([productId])
   @@index([godownId])
   @@index([procurementId])
+  deletedAt        DateTime?
 }
 
 model StockMovement {
@@ -312,6 +329,7 @@ model StockMovement {
   @@index([createdAt])
   @@index([fromGodownId])
   @@index([toGodownId])
+  deletedAt        DateTime?
 }
 
 model MillingSession {
@@ -336,6 +354,7 @@ model MillingSession {
 
   @@index([status])
   @@index([createdAt])
+  deletedAt        DateTime?
 }
 
 model SalesInvoice {
@@ -353,9 +372,6 @@ model SalesInvoice {
   amountPaid             Decimal              @default(0.00)
   fullyPaidAt            DateTime?
   transportFreightAmount Decimal?             @default(0.00)
-  isModified             Boolean              @default(false)
-  originalGrandTotal     Decimal?
-  adjustmentAmount       Decimal?
   buyersOrderNo          String?
   deliveryNote           String?
   destination            String?
@@ -364,6 +380,7 @@ model SalesInvoice {
   otherReferences        String?
   termsOfDelivery        String?
   vehicleNo              String?
+  isModified             Boolean              @default(false)
   payments               PaymentTransaction[]
   customer               Customer             @relation(fields: [customerId], references: [id])
   user                   User                 @relation(fields: [userId], references: [id])
@@ -375,6 +392,7 @@ model SalesInvoice {
   @@index([createdAt])
   @@index([vehicleId])
   @@index([userId])
+  deletedAt        DateTime?
 }
 
 model SalesInvoiceItem {
@@ -394,6 +412,7 @@ model SalesInvoiceItem {
 
   @@index([invoiceId])
   @@index([productId])
+  deletedAt        DateTime?
 }
 
 model PaymentTransaction {
@@ -431,6 +450,7 @@ model PaymentTransaction {
   @@index([customerId])
   @@index([supplierId])
   @@index([transactionDate])
+  deletedAt        DateTime?
 }
 
 model LaborWage {
@@ -448,6 +468,7 @@ model LaborWage {
 
   @@index([laborerId])
   @@index([status])
+  deletedAt        DateTime?
 }
 
 model Asset {
@@ -460,6 +481,7 @@ model Asset {
   maintenanceLogs  MaintenanceLog[]
 
   @@index([type])
+  deletedAt        DateTime?
 }
 
 model MaintenanceLog {
@@ -474,6 +496,44 @@ model MaintenanceLog {
 
   @@index([assetId])
   @@index([date])
+  deletedAt        DateTime?
+}
+
+model SparePart {
+  id              String            @id @default(cuid())
+  name            String            @unique
+  category        String
+  ratePerUnit     Decimal
+  availableQty    Int               @default(0)
+  inUseQty        Int               @default(0)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  assignments     SpareAssignment[]
+  scrapEntries    ScrapEntry[]
+  deletedAt        DateTime?
+}
+
+model SpareAssignment {
+  id              String   @id @default(cuid())
+  sparePartId     String
+  quantity        Int      @default(1)
+  machineName     String
+  dateAssigned    DateTime @default(now())
+  sparePart       SparePart @relation(fields: [sparePartId], references: [id])
+  deletedAt        DateTime?
+}
+
+model ScrapEntry {
+  id              String   @id @default(cuid())
+  sparePartId     String?
+  quantity        Int      @default(1)
+  reason          String
+  estimatedWeightKg Decimal?
+  status          String   @default("ACCUMULATED") // ACCUMULATED, SOLD
+  createdAt       DateTime @default(now())
+  soldAt          DateTime?
+  sparePart       SparePart? @relation(fields: [sparePartId], references: [id])
+  deletedAt        DateTime?
 }
 
 enum Role {
@@ -482,6 +542,8 @@ enum Role {
   WEIGHBRIDGE_OPERATOR
   FLOOR_MANAGER
   ACCOUNTANT
+  MILL_OWNER
+  SUPER_ADMIN
 }
 
 enum BatchStatus {
@@ -507,4 +569,58 @@ enum PaymentMode {
   CASH
   BANK
   UPI
+}
+
+model PersonalLoan {
+  id              String                    @id @default(cuid())
+  lenderName      String
+  loanType        String
+  principalAmount Decimal
+  interestRate    Decimal
+  tenureMonths    Int
+  startDate       DateTime
+  isPrivate       Boolean                   @default(false)
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+  transactions    PersonalLoanTransaction[]
+  deletedAt        DateTime?
+}
+
+model PersonalLoanTransaction {
+  id                 String                  @id @default(cuid())
+  loanId             String
+  paymentDate        DateTime                @default(now())
+  amountPaid         Decimal
+  principalComponent Decimal                 @default(0)
+  interestComponent  Decimal                 @default(0)
+  paymentType        PersonalLoanPaymentType
+  loan               PersonalLoan            @relation(fields: [loanId], references: [id])
+
+  @@index([loanId])
+  deletedAt        DateTime?
+}
+
+enum PersonalLoanPaymentType {
+  EMI
+  PREPAYMENT
+}
+
+model GlobalSetting {
+  key         String   @id
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt
+}
+
+model UserSession {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  isValid   Boolean  @default(true)
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([token])
+  @@index([userId])
 }

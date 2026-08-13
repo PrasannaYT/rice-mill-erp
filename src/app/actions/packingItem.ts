@@ -12,7 +12,7 @@ async function checkAuth() {
   if (!session) {
     throw new Error("Unauthorized");
   }
-  if (session.user.role !== 'ADMIN' && session.user.role !== 'MANAGER') {
+  if (!['ADMIN', 'MANAGER', 'MILL_OWNER', 'SUPER_ADMIN'].includes(session.user.role)) {
     throw new Error("Forbidden: Insufficient privileges");
   }
   return session;

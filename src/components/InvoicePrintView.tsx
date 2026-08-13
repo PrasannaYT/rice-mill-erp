@@ -42,7 +42,6 @@ type InvoicePrintProps = {
     cgstAmount?: number | string | null;
     sgstAmount?: number | string | null;
     igstAmount?: number | string | null;
-    isModified?: boolean;
   }; 
 };
 
@@ -325,9 +324,6 @@ export default function InvoicePrintView({ invoice }: InvoicePrintProps) {
           <ArrowLeft className="w-4 h-4 mr-1 sm:mr-2" /> <span className="hidden sm:inline">Back</span>
         </button>
         <div className="flex gap-2 ml-auto">
-          <button onClick={() => router.push(`/operator/sales?editInvoiceId=${invoice.id}`)} className="flex items-center px-3 py-2 bg-amber-500 text-black rounded font-bold hover:bg-amber-600 shadow">
-            <Edit3 className="w-4 h-4 sm:mr-2" /> <span className="hidden lg:inline">Edit Items</span>
-          </button>
           <button onClick={handleSharePDF} className="flex items-center px-3 py-2 bg-green-600 text-white rounded font-bold hover:bg-green-700 shadow">
             <Share2 className="w-4 h-4 sm:mr-2" /> <span className="hidden lg:inline">Share PDF</span>
           </button>
@@ -492,10 +488,7 @@ export default function InvoicePrintView({ invoice }: InvoicePrintProps) {
               lineHeight: '1.2'
             }}
           >
-            <h1 className="text-center font-bold text-xl mb-2 uppercase">
-              Bill of Supply
-              {invoice.isModified && <span className="ml-2 text-xs text-gray-500 font-bold border border-gray-500 px-1 rounded align-middle">MODIFIED</span>}
-            </h1>
+            <h1 className="text-center font-bold text-xl mb-2 uppercase">Bill of Supply</h1>
             
             {/* THIS is the main outer border of the invoice format they want, with NO extra padding wrapping it */}
             <div className="border border-black flex flex-col flex-1 relative z-10 bg-white">

@@ -42,6 +42,7 @@ export default function AddPersonFAB({
             <option value="CUSTOMER">Customer (Sales)</option>
             <option value="SUPPLIER">Paddy Broker (Procurement)</option>
             <option value="BAG_VENDOR">Bag Vendor / Packaging Supplier</option>
+            <option value="RICE_MILL">Rice Mill Owner</option>
           </Select>
 
           <Input label="Company / Name *" type="text" name="name" required placeholder="e.g. Acme Farms" />

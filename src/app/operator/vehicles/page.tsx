@@ -10,7 +10,7 @@ import { AppHeader } from "@/components/ui/AppHeader";
 export default async function VehiclesPage() {
   const session = await getServerSession(authOptions);
   
-  if (!session || !['ADMIN', 'MANAGER', 'WEIGHBRIDGE_OPERATOR', 'ACCOUNTANT'].includes(session.user?.role || '')) {
+  if (!session || !['ADMIN', 'MANAGER', 'WEIGHBRIDGE_OPERATOR', 'ACCOUNTANT', 'MILL_OWNER', 'SUPER_ADMIN'].includes(session.user?.role || '')) {
     redirect('/dashboard');
   }
 

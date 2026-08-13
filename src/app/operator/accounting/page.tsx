@@ -5,6 +5,9 @@ import prisma from "@/lib/prisma";
 import AccountingDashboardClient from '@/components/AccountingDashboardClient';
 import { AppHeader } from '@/components/ui/AppHeader';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export const metadata = {
   title: 'Cashbook & Accounts - Rice Mill ERP',
 };
@@ -37,36 +40,67 @@ export default async function AccountingDashboardPage() {
   }, 0);
 
   // Fetch pending procurement batches awaiting cashier payment confirmation
-  const rawProcurements = await prisma.procurementBatch.findMany({
+  const rawProcurementsAll = await prisma.procurementBatch.findMany({
     where: { status: { in: ['FINALIZED', 'PARTIALLY_PAID'] } },
     include: {
       supplier: true,
-        farmer: true,
-        payments: { orderBy: { createdAt: 'desc' } },
+      farmer: true,
+      payments: { orderBy: { createdAt: 'desc' } },
       product: true,
       godown: true,
     },
     orderBy: { createdAt: 'desc' }
   });
 
+  const rawProcurements = [];
+  for (const b of rawProcurementsAll) {
+    const total = Number(b.farmerTotalPayable || 0) + Number(b.brokerCommissionTotal || 0);
+    const paid = Number(b.amountPaid || 0);
+    const remaining = Math.round((total - paid) * 100) / 100;
+    if (remaining <= 0) {
+      await prisma.procurementBatch.update({
+        where: { id: b.id },
+        data: { status: 'PAID', fullyPaidAt: new Date() }
+      }).catch(console.error);
+    } else {
+      rawProcurements.push(b);
+    }
+  }
+
   // Fetch pending packing material procurements awaiting cashier payment confirmation
-  const rawPackingItems = await prisma.packingItem.findMany({
+  const rawPackingItemsAll = await prisma.packingItem.findMany({
     where: { status: { in: ['FINALIZED', 'PARTIALLY_PAID'] } },
     include: {
       godown: true,
-        supplier: true,
-        payments: { orderBy: { createdAt: 'desc' } },
+      supplier: true,
+      payments: { orderBy: { createdAt: 'desc' } },
     },
     orderBy: { createdAt: 'desc' }
   });
 
+  const rawPackingItems = [];
+  for (const p of rawPackingItemsAll) {
+    const originalBags = Number(p.initialQuantityBags) > 0 ? Number(p.initialQuantityBags) : Number(p.quantityBags);
+    const total = originalBags * Number(p.perBagRate);
+    const paid = Number(p.amountPaid || 0);
+    const remaining = Math.round((total - paid) * 100) / 100;
+    if (remaining <= 0) {
+      await prisma.packingItem.update({
+        where: { id: p.id },
+        data: { status: 'PAID', fullyPaidAt: new Date() }
+      }).catch(console.error);
+    } else {
+      rawPackingItems.push(p);
+    }
+  }
+
   // Fetch pending sales invoices awaiting cashier receipt confirmation
-  const rawSales = await prisma.salesInvoice.findMany({
+  const rawSalesAll = await prisma.salesInvoice.findMany({
     where: { status: { in: ['FINALIZED', 'PARTIALLY_PAID'] } },
     include: {
       customer: true,
       vehicle: true,
-        payments: { orderBy: { createdAt: 'desc' } },
+      payments: { orderBy: { createdAt: 'desc' } },
       items: {
         include: {
           product: true,
@@ -76,6 +110,21 @@ export default async function AccountingDashboardPage() {
     },
     orderBy: { createdAt: 'desc' }
   });
+
+  const rawSales = [];
+  for (const s of rawSalesAll) {
+    const total = Number(s.grandTotal || 0);
+    const paid = Number(s.amountPaid || 0);
+    const remaining = Math.round((total - paid) * 100) / 100;
+    if (remaining <= 0) {
+      await prisma.salesInvoice.update({
+        where: { id: s.id },
+        data: { status: 'PAID', fullyPaidAt: new Date() }
+      }).catch(console.error);
+    } else {
+      rawSales.push(s);
+    }
+  }
 
   // Fetch recent transactions
   const rawTransactions = await prisma.paymentTransaction.findMany({
@@ -173,6 +222,7 @@ export default async function AccountingDashboardPage() {
     brandName: pkg.brandName,
     capacityKg: pkg.capacityKg.toString(),
     quantityBags: pkg.quantityBags.toString(),
+    initialQuantityBags: pkg.initialQuantityBags?.toString() || pkg.quantityBags.toString(),
     perBagRate: pkg.perBagRate.toString(),
     createdAt: pkg.createdAt.toISOString(),
     amountPaid: pkg.amountPaid?.toString() || "0",

@@ -11,7 +11,7 @@ async function checkAuth() {
   if (!session) {
     throw new Error("Unauthorized");
   }
-  const allowedRoles = ['ADMIN', 'MANAGER', 'ACCOUNTANT', 'OPERATOR', 'FLOOR_MANAGER'];
+  const allowedRoles = ['ADMIN', 'MANAGER', 'ACCOUNTANT', 'OPERATOR', 'FLOOR_MANAGER', 'MILL_OWNER', 'SUPER_ADMIN'];
   if (!allowedRoles.includes(session.user.role)) {
     throw new Error("Forbidden: Insufficient privileges");
   }
@@ -84,7 +84,7 @@ export async function finalizeInvoiceAction(data: {
   });
   
   revalidatePath('/operator/sales');
-  revalidatePath('/admin/sales');
+  
   revalidatePath('/admin/inventory');
   revalidatePath('/admin/reports'); // bust analytics cache
   
@@ -107,23 +107,35 @@ export async function updateInvoiceDetailsAction(invoiceId: string, data: {
   return SalesService.updateInvoiceDetails(invoiceId, data);
 }
 
-export async function modifySalesInvoiceAction(invoiceId: string, data: {
-  items: InvoiceItemInput[];
-}) {
+export async function saveSalesDraftAction(data: any & { draftId?: string }) {
   const session = await checkAuth();
+  
+  const parsed = invoiceSchema.parse(data);
 
-  const parsedItems = z.array(invoiceItemSchema).min(1, "At least one item is required").parse(data.items);
-
-  const invoice = await SalesService.modifyInvoice(invoiceId, {
+  const draft = await SalesService.saveDraft({
+    id: data.draftId,
     userId: session.user.id,
-    items: parsedItems,
+    customerId: parsed.customerId,
+    vehicleId: parsed.vehicleId,
+    transportFreightAmount: parsed.transportFreightAmount ? Number(parsed.transportFreightAmount) : 0,
+    items: parsed.items,
+    generateBill: parsed.generateBill,
+    deliveryNote: parsed.deliveryNote,
+    modeOfPayment: parsed.modeOfPayment,
+    buyersOrderNo: parsed.buyersOrderNo,
+    dispatchDocNo: parsed.dispatchDocNo,
+    destination: parsed.destination,
+    termsOfDelivery: parsed.termsOfDelivery,
+    otherReferences: parsed.otherReferences,
+    vehicleNo: parsed.vehicleNo,
   });
-
+  
   revalidatePath('/operator/sales');
-  revalidatePath('/admin/sales');
-  revalidatePath('/admin/inventory');
-  revalidatePath('/admin/reports'); // bust analytics cache
-  revalidatePath('/accountant');
+  return { id: draft.id };
+}
 
-  return { id: invoice.id };
+export async function deleteSalesDraftAction(id: string) {
+  await checkAuth();
+  await SalesService.deleteDraft(id);
+  revalidatePath('/operator/sales');
 }

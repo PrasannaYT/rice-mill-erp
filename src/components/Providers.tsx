@@ -4,6 +4,10 @@ import { useEffect } from 'react';
 import Lenis from 'lenis';
 import { Toaster } from 'sonner';
 import { SessionProvider } from 'next-auth/react';
+import { NetworkStatusIndicator } from '@/components/NetworkStatusIndicator';
+import { Suspense } from 'react';
+import { PageTransitionOverlay } from '@/components/ui/PageTransitionOverlay';
+import { IdleTimeoutProvider } from '@/components/IdleTimeoutProvider';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
@@ -25,7 +29,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <SessionProvider>
-      {children}
+      <IdleTimeoutProvider>
+        {children}
+        <Suspense fallback={null}>
+        <PageTransitionOverlay />
+      </Suspense>
+      <NetworkStatusIndicator />
       <Toaster
         position="top-right"
         toastOptions={{
@@ -40,6 +49,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           },
         }}
       />
+      </IdleTimeoutProvider>
     </SessionProvider>
   );
 }

@@ -26,22 +26,32 @@ export const metadata = {
 
 async function handleCreateAction(formData: FormData): Promise<void> {
   "use server";
-  const role = formData.get('role');
+  const role = formData.get('role') as string;
   if (role === 'CUSTOMER') {
     await createCustomerAction(formData);
   } else {
-    formData.set('category', role === 'BAG_VENDOR' ? 'BAG_VENDOR' : 'PADDY_BROKER');
+    const categoryMap: Record<string, string> = {
+      'BAG_VENDOR': 'BAG_VENDOR',
+      'SUPPLIER': 'PADDY_BROKER',
+      'RICE_MILL': 'RICE_MILL',
+    };
+    formData.set('category', categoryMap[role] || 'PADDY_BROKER');
     await createSupplierAction(formData);
   }
 }
 
 async function handleUpdateAction(formData: FormData): Promise<void> {
   "use server";
-  const role = formData.get('role');
+  const role = formData.get('role') as string;
   if (role === 'CUSTOMER') {
     await updateCustomerAction(formData);
   } else {
-    formData.set('category', role === 'BAG_VENDOR' ? 'BAG_VENDOR' : 'PADDY_BROKER');
+    const categoryMap: Record<string, string> = {
+      'BAG_VENDOR': 'BAG_VENDOR',
+      'SUPPLIER': 'PADDY_BROKER',
+      'RICE_MILL': 'RICE_MILL',
+    };
+    formData.set('category', categoryMap[role] || 'PADDY_BROKER');
     await updateSupplierAction(formData);
   }
 }
@@ -50,7 +60,7 @@ export default async function PeopleMasterDataPage({ searchParams }: { searchPar
   const params = await searchParams;
   const session = await getServerSession(authOptions);
 
-  if (!session || (session.user?.role !== 'ADMIN' && session.user?.role !== 'MANAGER')) {
+  if (!session || (session.user?.role !== 'ADMIN' && session.user?.role !== 'MANAGER' && session.user?.role !== 'MILL_OWNER' && session.user?.role !== 'SUPER_ADMIN')) {
     redirect('/dashboard');
   }
 
@@ -58,8 +68,8 @@ export default async function PeopleMasterDataPage({ searchParams }: { searchPar
   const customers = await CustomerRepository.list();
 
   let allPeople = [
-    ...suppliers.map(s => ({ ...s, role: (s as any).category === 'BAG_VENDOR' ? 'BAG_VENDOR' as const : 'SUPPLIER' as const })),
-    ...customers.map(c => ({ ...c, role: 'CUSTOMER' as const }))
+    ...suppliers.map(s => ({ ...s, role: ((s as any).category === 'BAG_VENDOR' ? 'BAG_VENDOR' : (s as any).category === 'RICE_MILL' ? 'RICE_MILL' : 'SUPPLIER') as string })),
+    ...customers.map(c => ({ ...c, role: 'CUSTOMER' as string }))
   ].sort((a, b) => a.name.localeCompare(b.name));
 
   if (params?.q) {
@@ -92,6 +102,7 @@ export default async function PeopleMasterDataPage({ searchParams }: { searchPar
                 <option value="CUSTOMER">Customer (Sales)</option>
                 <option value="SUPPLIER">Paddy Broker (Procurement)</option>
                 <option value="BAG_VENDOR">Bag Vendor / Packaging Supplier</option>
+                <option value="RICE_MILL">Rice Mill Owner</option>
               </Select>
               
               <Input label="Company / Name *" type="text" name="name" required placeholder="e.g. Acme Farms" />
@@ -142,7 +153,7 @@ export default async function PeopleMasterDataPage({ searchParams }: { searchPar
                         <div className="flex-1 min-w-0">
                           <div className="font-black text-base uppercase truncate">{person.name}</div>
                           <div className="text-[10px] font-bold text-[var(--muted)] truncate">
-                            {person.role === 'BAG_VENDOR' ? 'BAG VENDOR' : person.role === 'SUPPLIER' ? 'PADDY BROKER' : person.role} • {person.contact || 'No Contact'} {person.gstin ? `• ${person.gstin.toUpperCase()}` : ''}
+                            {person.role === 'BAG_VENDOR' ? 'BAG VENDOR' : person.role === 'RICE_MILL' ? 'RICE MILL OWNER' : person.role === 'SUPPLIER' ? 'PADDY BROKER' : person.role} • {person.contact || 'No Contact'} {person.gstin ? `• ${person.gstin.toUpperCase()}` : ''}
                           </div>
                         </div>
                       </div>
