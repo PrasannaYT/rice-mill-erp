@@ -59,7 +59,8 @@ export const authOptions = {
   },
   pages: {
     signIn: '/login',
-  }
+  },
+  secret: process.env.NEXTAUTH_SECRET || 'super-secret-rice-mill-key-2026-secure-random',
 }
 
 const handler = NextAuth(authOptions)
