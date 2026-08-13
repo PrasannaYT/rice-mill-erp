@@ -28,7 +28,7 @@ export default async function DashboardPage() {
   }
 
   const role = session.user?.role;
-  const settings = await prisma.globalSetting.findMany();
+  const settings = await prisma.globalSetting.findMany().catch(() => []);
   
   const isModuleEnabled = (key: string) => {
     const s = settings.find(s => s.key === key);

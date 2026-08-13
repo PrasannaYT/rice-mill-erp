@@ -26,7 +26,11 @@ export async function toggleGlobalSetting(key: string, value: boolean) {
 }
 
 export async function getGlobalSetting(key: string, defaultVal: boolean): Promise<boolean> {
-  const setting = await prisma.globalSetting.findUnique({ where: { key } });
-  if (!setting) return defaultVal;
-  return setting.value === 'true';
+  try {
+    const setting = await prisma.globalSetting.findUnique({ where: { key } });
+    if (!setting) return defaultVal;
+    return setting.value === 'true';
+  } catch {
+    return defaultVal;
+  }
 }
