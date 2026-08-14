@@ -15,6 +15,8 @@ import { AppHeader } from "@/components/ui/AppHeader";
 import DashboardWelcomeWrapper from "@/components/DashboardWelcomeWrapper";
 import { getServerSession as gss } from "next-auth";
 
+export const dynamic = 'force-dynamic';
+
 export const metadata = {
   title: 'Dashboard — Rice Mill ERP',
   description: 'Central command center for the Rice Mill ERP system.',
