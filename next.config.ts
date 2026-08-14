@@ -2,6 +2,14 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   devIndicators: false,
+  compress: true,
+  reactStrictMode: true,
+  experimental: {
+    staleTimes: {
+      dynamic: 30,
+      static: 180,
+    },
+  },
   allowedDevOrigins: ['192.168.0.106', '192.168.0.103', '192.168.241.1', '192.168.0.101', '192.168.0.102', '192.168.0.104', '192.168.0.105', '192.168.0.112'],
   async headers() {
     return [
