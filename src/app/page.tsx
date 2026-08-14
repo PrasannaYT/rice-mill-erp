@@ -3,10 +3,13 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
 export default async function LandingPage() {
-  const session = await getServerSession(authOptions);
-  if (session) {
-    redirect('/dashboard');
-  } else {
-    redirect('/login');
+  try {
+    const session = await getServerSession(authOptions);
+    if (session) {
+      redirect('/dashboard');
+    }
+  } catch (err) {
+    // If session check fails or unauthenticated, fallback redirect to login
   }
+  redirect('/login');
 }

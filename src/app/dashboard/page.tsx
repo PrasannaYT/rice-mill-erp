@@ -21,7 +21,12 @@ export const metadata = {
 };
 
 export default async function DashboardPage() {
-  const session = await getServerSession(authOptions);
+  let session = null;
+  try {
+    session = await getServerSession(authOptions);
+  } catch (err) {
+    console.error("Dashboard session check error:", err);
+  }
 
   if (!session) {
     redirect('/login');
