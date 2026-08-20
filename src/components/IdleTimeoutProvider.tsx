@@ -4,8 +4,8 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { signOut, useSession } from 'next-auth/react';
 import { usePathname, useRouter } from 'next/navigation';
 
-const IDLE_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
-const WARNING_BEFORE_MS = 60 * 1000; // 1 minute warning
+const IDLE_TIMEOUT_MS = 9 * 60 * 1000; // 9 minutes auto signout
+const WARNING_BEFORE_MS = 60 * 1000; // 1 minute warning (triggers at 8 minutes)
 
 export function IdleTimeoutProvider({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
