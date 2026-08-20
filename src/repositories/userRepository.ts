@@ -3,8 +3,11 @@ import { type Prisma, type User } from '@prisma/client';
 
 export class UserRepository {
   static async findByEmail(email: string): Promise<User | null> {
-    return prisma.user.findUnique({
-      where: { email },
+    const cleanEmail = email.trim().toLowerCase();
+    return prisma.user.findFirst({
+      where: {
+        email: { equals: cleanEmail, mode: 'insensitive' }
+      },
     });
   }
 
