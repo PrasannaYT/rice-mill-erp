@@ -35,8 +35,10 @@ export default async function ReportsDashboardPage() {
     redirect('/dashboard');
   }
 
-  const pnl = await ReportService.generatePnL();
-  const advanced = await ReportService.getAdvancedAnalytics();
+  const [pnl, advanced] = await Promise.all([
+    ReportService.generatePnL(),
+    ReportService.getAdvancedAnalytics(),
+  ]);
 
   const isProfitable = pnl.netProfit >= 0;
   const grossMarginPct = pnl.revenue > 0 ? ((pnl.grossProfit / pnl.revenue) * 100).toFixed(1) : '0.0';

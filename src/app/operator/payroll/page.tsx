@@ -19,13 +19,15 @@ export default async function PayrollPage() {
     redirect('/login');
   }
 
-  const laborers = await prisma.laborer.findMany({
-    orderBy: { name: 'asc' }
-  });
-
-  const banks = await prisma.bank.findMany({
-    select: { id: true, bankName: true, accountNumber: true }
-  });
+  const [laborers, banks] = await Promise.all([
+    prisma.laborer.findMany({
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true, type: true, contact: true, balance: true }
+    }),
+    prisma.bank.findMany({
+      select: { id: true, bankName: true, accountNumber: true }
+    })
+  ]);
 
   return (
     <div className="min-h-screen">

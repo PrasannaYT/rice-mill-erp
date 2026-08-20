@@ -19,30 +19,82 @@ export default async function SalesPage() {
     redirect('/login');
   }
 
-  const rawCustomers = await prisma.customer.findMany({
-    orderBy: { name: 'asc' }
-  });
-  const vehicles = await prisma.vehicle.findMany({
-    orderBy: { licensePlate: 'asc' }
-  });
-  const products = await prisma.product.findMany({
-    orderBy: { name: 'asc' }
-  });
-  const godowns = await prisma.godown.findMany({
-    orderBy: { name: 'asc' }
-  });
-  
-  // Fetch active lots to know what inventory is available for sale
-  const lots = await prisma.lot.findMany({
-    where: { status: 'ACTIVE' },
-    select: { id: true, productId: true, godownId: true, currentQuantity: true }
-  });
-
-  // Fetch packing items inventory for bag selection
-  const rawPackingItems = await prisma.packingItem.findMany({
-    include: { godown: true },
-    orderBy: { brandName: 'asc' }
-  });
+  // Parallel fan-out: run all 7 independent database queries concurrently
+  const [
+    rawCustomers,
+    vehicles,
+    products,
+    godowns,
+    lots,
+    rawPackingItems,
+    pendingDraftsRaw
+  ] = await Promise.all([
+    prisma.customer.findMany({
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true, contact: true, gstin: true, address: true, balance: true }
+    }),
+    prisma.vehicle.findMany({
+      orderBy: { licensePlate: 'asc' },
+      select: { id: true, licensePlate: true, type: true }
+    }),
+    prisma.product.findMany({
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true, gstRate: true }
+    }),
+    prisma.godown.findMany({
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true, type: true }
+    }),
+    prisma.lot.findMany({
+      where: { status: 'ACTIVE' },
+      select: { id: true, productId: true, godownId: true, currentQuantity: true }
+    }),
+    prisma.packingItem.findMany({
+      select: {
+        id: true,
+        brandName: true,
+        capacityKg: true,
+        quantityBags: true,
+        perBagRate: true,
+        godownId: true,
+        godown: { select: { name: true } }
+      },
+      orderBy: { brandName: 'asc' }
+    }),
+    prisma.salesInvoice.findMany({
+      where: { status: 'DRAFT', userId: session.user.id },
+      select: {
+        id: true,
+        invoiceNumber: true,
+        customerId: true,
+        vehicleId: true,
+        deliveryNote: true,
+        modeOfPayment: true,
+        buyersOrderNo: true,
+        dispatchDocNo: true,
+        destination: true,
+        termsOfDelivery: true,
+        otherReferences: true,
+        vehicleNo: true,
+        transportFreightAmount: true,
+        customer: { select: { name: true } },
+        items: {
+          select: {
+            id: true,
+            productId: true,
+            godownId: true,
+            quantity: true,
+            rate: true,
+            gstRate: true,
+            lineTotal: true,
+            taxAmount: true,
+            packingItemName: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    })
+  ]);
 
   const customers = rawCustomers.map(c => ({
     id: c.id,
@@ -75,13 +127,6 @@ export default async function SalesPage() {
     name: p.name,
     gstRate: p.gstRate?.toString() || '0'
   }));
-
-  // Fetch pending drafts
-  const pendingDraftsRaw = await prisma.salesInvoice.findMany({
-    where: { status: 'DRAFT', userId: session.user.id },
-    include: { items: true, customer: true },
-    orderBy: { createdAt: 'desc' }
-  });
 
   const pendingDrafts = pendingDraftsRaw.map(d => ({
     id: d.id,

@@ -32,7 +32,6 @@ export default async function MasterDataPage() {
     customersCount,
     productsCount,
     godownsCount,
-    vehiclesCount,
     banksCount,
     laborersCount,
     farmersCount
@@ -41,7 +40,6 @@ export default async function MasterDataPage() {
     CustomerRepository.count(),
     ProductRepository.count(),
     GodownRepository.count(),
-    VehicleRepository.count(),
     BankRepository.count(),
     LaborerRepository.count(),
     FarmerRepository.count()
@@ -53,7 +51,6 @@ export default async function MasterDataPage() {
     { title: "Laborers & Gangs", count: laborersCount, icon: HardHat, link: "/admin/master-data/laborers", color: "var(--red)" },
     { title: "Products & Yields", count: productsCount, icon: Package, link: "/admin/master-data/products", color: "var(--blue)" },
     { title: "Godowns & Warehouses", count: godownsCount, icon: Warehouse, link: "/admin/master-data/godowns", color: "var(--gold)" },
-    { title: "Vehicles & Transport", count: vehiclesCount, icon: Truck, link: "/admin/master-data/vehicles", color: "var(--blue)" },
     { title: "Banks & Finances", count: banksCount, icon: Coins, link: "/admin/master-data/finance", color: "var(--red)" },
   ];
 

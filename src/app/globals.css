@@ -63,6 +63,13 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* ━━━━━━━ TOUCH ERGONOMICS (Phase 3 §2) ━━━━━━━
+   Kill 300ms double-tap-zoom delay on ALL interactive elements.
+   This makes taps feel instant — matching native iOS/Android apps. */
+a, button, input, select, textarea, label, [role="button"], [tabindex] {
+  touch-action: manipulation;
+}
+
 /* Strip Native Form Styles (Safari/Firefox Mobile) */
 input:not([type="checkbox"]):not([type="radio"]), select, button {
   -webkit-appearance: none;
@@ -135,10 +142,15 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: var(--shadow-md);
   border-radius: 4px;
   transition: box-shadow 150ms ease, transform 150ms ease;
+  will-change: transform;
 }
 .card-brutal:hover {
   box-shadow: var(--shadow-lg);
   transform: translate(-2px, -2px);
+}
+.card-brutal:active {
+  transform: scale(0.97);
+  opacity: 0.9;
 }
 
 /* Gold accent line */
@@ -161,14 +173,16 @@ h1, h2, h3, h4, h5, h6 {
   border-radius: 4px;
   border: 2px solid var(--border);
   cursor: pointer;
-  transition: box-shadow 120ms ease, transform 120ms ease, background 120ms ease;
+  transition: box-shadow 120ms ease, transform 120ms ease, background 120ms ease, opacity 80ms ease;
   user-select: none;
   text-decoration: none;
   white-space: nowrap;
+  will-change: transform;
 }
 
 .btn:active {
-  transform: translate(2px, 2px);
+  transform: translate(2px, 2px) scale(0.96);
+  opacity: 0.85;
   box-shadow: none !important;
 }
 
@@ -527,5 +541,42 @@ div[data-nextjs-dialog-overlay] {
   visibility: hidden !important;
   opacity: 0 !important;
   pointer-events: none !important;
+}
+
+/* ━━━━━━━ GPU ACCELERATION & RENDERING (Phase 3 §3) ━━━━━━━
+   Force the mobile GPU to composite animated elements on separate layers.
+   This guarantees 60fps animations even on old Android phones. */
+
+/* Promote modals, overlays, and bottom sheets to GPU layers */
+.fixed[class*="z-"],
+[role="dialog"],
+[role="alertdialog"],
+.modal-overlay {
+  transform: translateZ(0);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+}
+
+/* ━━━━━━━ CONTENT VISIBILITY (Phase 3 §3) ━━━━━━━
+   Skip rendering and layout calculations for off-screen list items.
+   The browser engine completely ignores anything not in the viewport. */
+.list-item-offscreen,
+.table-brutal tbody tr,
+.stat-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 60px;
+}
+
+/* ━━━━━━━ SAFE AREA INSETS (Phase 3 §1) ━━━━━━━
+   iOS Notch and Android Pill padding for edge-to-edge displays. */
+.safe-area-top {
+  padding-top: max(16px, env(safe-area-inset-top));
+}
+.safe-area-bottom {
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+}
+.safe-area-x {
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
 }
 

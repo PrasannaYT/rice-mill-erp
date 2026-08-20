@@ -46,6 +46,17 @@ const nextConfig: NextConfig = {
           }
         ],
       },
+      // Aggressive caching for static assets (images, fonts, videos)
+      // These files are fingerprinted by Next.js so stale cache is not an issue
+      {
+        source: '/:path*.(png|jpg|jpeg|webp|avif|ico|svg|woff|woff2|ttf|eot|mp4)',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable'
+          }
+        ],
+      },
     ];
   },
 };

@@ -45,6 +45,17 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${spaceGrotesk.variable} ${inter.variable}`} suppressHydrationWarning>
+      <head>
+        {/* PWA: Apple Meta Tags for full-screen home-screen app on iOS */}
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="Mill ERP" />
+        {/* Preconnect: negotiate TLS handshake for Google Fonts before app finishes loading */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        {/* DNS Prefetch for API domain (same-origin, but helps on proxy setups) */}
+        <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
+      </head>
       <body>
         <Providers>
           {children}
@@ -53,3 +64,4 @@ export default function RootLayout({
     </html>
   );
 }
+

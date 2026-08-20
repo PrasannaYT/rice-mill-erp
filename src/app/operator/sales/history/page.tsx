@@ -18,8 +18,13 @@ export default async function InvoiceHistoryPage() {
   const invoices = await prisma.salesInvoice.findMany({
     orderBy: { createdAt: 'desc' },
     take: 50,
-    include: {
-      customer: true,
+    select: {
+      id: true,
+      invoiceNumber: true,
+      grandTotal: true,
+      status: true,
+      createdAt: true,
+      customer: { select: { name: true } },
     }
   });
 

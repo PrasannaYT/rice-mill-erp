@@ -17,38 +17,84 @@ export default async function AdminInventoryPage({ searchParams }: { searchParam
     redirect('/dashboard');
   }
 
-  const suppliers = await prisma.supplier.findMany({ orderBy: { name: 'asc' } });
-  const products = await prisma.product.findMany({ orderBy: { name: 'asc' } });
-
-  // Fetch Godowns and active lots
-  const godowns = await prisma.godown.findMany({
-    include: {
-      lots: {
-        where: { status: 'ACTIVE' },
-        include: { 
-          product: true,
-          procurementBatch: {
-            include: {
-              supplier: true,
-              farmer: true
+  // Parallel fan-out: execute all 7 independent database queries concurrently
+  const [
+    suppliers,
+    products,
+    godowns,
+    stockMovements,
+    rawPackingItems,
+    salesInvoiceItems,
+    procurementBatchesForMovements
+  ] = await Promise.all([
+    prisma.supplier.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
+    prisma.product.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true, category: true, unit: true, hsnCode: true, gstRate: true } }),
+    prisma.godown.findMany({
+      include: {
+        lots: {
+          where: { status: 'ACTIVE' },
+          select: {
+            id: true,
+            productId: true,
+            godownId: true,
+            currentQuantity: true,
+            product: { select: { id: true, name: true, category: true } },
+            procurementBatch: {
+              select: {
+                id: true,
+                supplier: { select: { name: true } },
+                farmer: { select: { name: true } }
+              }
             }
           }
         }
+      },
+      orderBy: { name: 'asc' }
+    }),
+    prisma.stockMovement.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 30,
+      select: {
+        id: true,
+        type: true,
+        quantity: true,
+        createdAt: true,
+        referenceId: true,
+        productId: true,
+        product: { select: { name: true, category: true } },
+        fromGodown: { select: { name: true } },
+        toGodown: { select: { name: true } }
       }
-    },
-    orderBy: { name: 'asc' }
-  });
-
-  // Fetch recent stock movements for audit trail
-  const stockMovements = await prisma.stockMovement.findMany({
-    orderBy: { createdAt: 'desc' },
-    take: 30,
-    include: {
-      product: true,
-      fromGodown: true,
-      toGodown: true
-    }
-  });
+    }),
+    PackingItemRepository.list(),
+    prisma.salesInvoiceItem.findMany({
+      where: { packingItemName: { not: null } },
+      select: {
+        id: true,
+        quantity: true,
+        packingItemName: true,
+        invoice: { select: { createdAt: true, invoiceNumber: true } },
+        godown: { select: { name: true } }
+      }
+    }),
+    prisma.procurementBatch.findMany({
+      where: { status: 'FINALIZED', deletedAt: null },
+      select: {
+        id: true,
+        netWeight: true,
+        grossWeight: true,
+        createdAt: true,
+        godownId: true,
+        productId: true,
+        product: { select: { id: true, name: true, category: true } },
+        godown: { select: { name: true } },
+        supplier: { select: { name: true } },
+        farmer: { select: { name: true } }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50
+    })
+  ]);
 
   const safeStockMovements = stockMovements.map(m => ({
     id: m.id,
@@ -62,16 +108,12 @@ export default async function AdminInventoryPage({ searchParams }: { searchParam
     toGodownName: m.toGodown?.name || 'Outbound / Sale'
   }));
 
-  // Collect all active lots flat for modal usage
   const allLots = godowns.flatMap(g => g.lots.map(l => ({
     id: l.id,
     productId: l.productId,
     godownId: l.godownId,
     currentQuantity: Number(l.currentQuantity)
   })));
-
-  // Fetch Packing Items Inventory
-  const rawPackingItems = await PackingItemRepository.list();
 
   const packingItems = rawPackingItems.filter(item => Number(item.quantityBags) > 0).map(item => ({
     id: item.id,
@@ -86,14 +128,7 @@ export default async function AdminInventoryPage({ searchParams }: { searchParam
     supplier: item.supplier ? { id: item.supplier.id, name: item.supplier.name } : null,
   }));
 
-  // Generate Synthetic Stock Movements for Packing Items
-  const salesInvoiceItems = await prisma.salesInvoiceItem.findMany({
-    where: { packingItemName: { not: null } },
-    include: { invoice: true, godown: true }
-  });
-
   const syntheticPackingMovements = salesInvoiceItems.map(item => {
-    // Find matching packing item by name
     const matchingItem = rawPackingItems.find(p => `${p.brandName} ${Number(p.capacityKg)} KG` === item.packingItemName);
     let bags = 0;
     if (matchingItem && Number(matchingItem.capacityKg) > 0) {
@@ -126,12 +161,6 @@ export default async function AdminInventoryPage({ searchParams }: { searchParam
       fromGodownName: item.supplier?.name || 'Supplier',
       toGodownName: item.godown?.name || 'Godown'
     };
-  });
-  const procurementBatchesForMovements = await prisma.procurementBatch.findMany({
-    where: { status: 'FINALIZED', deletedAt: null },
-    include: { product: true, godown: true, supplier: true, farmer: true },
-    orderBy: { createdAt: 'desc' },
-    take: 50
   });
 
   const existingRefIds = new Set(stockMovements.map(m => m.referenceId).filter(Boolean));

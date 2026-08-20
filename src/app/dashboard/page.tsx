@@ -304,7 +304,7 @@ export default async function DashboardPage() {
             {allowedModules.map(mod => {
               const Icon = mod.icon;
               return (
-                <Link key={mod.href} href={mod.href}
+                <Link key={mod.href} href={mod.href} prefetch={true}
                   className="group block no-underline"
                   style={{ '--glow': mod.glowColor, '--border-hover': mod.borderColor } as React.CSSProperties}>
                   <div

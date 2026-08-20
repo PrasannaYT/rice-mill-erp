@@ -25,29 +25,70 @@ export default async function WeighbridgePage({ searchParams }: { searchParams: 
     redirect('/login');
   }
 
-  // Fetch dependencies to populate the dropdowns
-  const allSuppliers = await SupplierRepository.list();
+  // Parallel fan-out: execute all 6 independent database queries concurrently
+  const [
+    allSuppliers,
+    allFarmers,
+    allProducts,
+    allGodowns,
+    pendingDrafts,
+    farmersWithHistory
+  ] = await Promise.all([
+    SupplierRepository.list(),
+    prisma.farmer.findMany({ select: { id: true, name: true, brokerId: true } }),
+    ProductRepository.list(),
+    GodownRepository.list(),
+    prisma.procurementBatch.findMany({
+      where: { status: 'DRAFT' },
+      select: {
+        id: true,
+        supplierId: true,
+        farmerId: true,
+        productId: true,
+        godownId: true,
+        grossWeight: true,
+        tareWeight: true,
+        perBagWeight: true,
+        farmerBagRate: true,
+        brokerCommissionRate: true,
+        beforeDryingMoisture: true,
+        afterDryingMoisture: true,
+        createdAt: true,
+        supplier: { select: { name: true } },
+        product: { select: { name: true } },
+        farmer: { select: { name: true } },
+      },
+      orderBy: { createdAt: 'desc' }
+    }),
+    prisma.farmer.findMany({
+      select: {
+        id: true,
+        name: true,
+        contact: true,
+        village: true,
+        brokerId: true,
+        broker: { select: { id: true, name: true } },
+        batches: {
+          where: { status: { in: ['FINALIZED', 'PARTIALLY_PAID', 'PAID'] } },
+          select: {
+            id: true,
+            createdAt: true,
+            netWeight: true,
+            grossWeight: true,
+            product: { select: { name: true } }
+          },
+          orderBy: { createdAt: 'desc' }
+        }
+      }
+    })
+  ]);
+
   const safeSuppliers = allSuppliers.map(s => ({ id: s.id, name: s.name, category: s.category || 'PADDY_BROKER' }));
-  
-  const allFarmers = await prisma.farmer.findMany();
   const safeFarmers = allFarmers.map(f => ({ id: f.id, name: f.name, brokerId: f.brokerId }));
-  
-  // Only get Raw Material and Packaging products for procurement
-  const allProducts = await ProductRepository.list();
   const safeProducts = allProducts
     .filter(p => p.category === 'RAW_MATERIAL' || p.category === 'PACKAGING_MATERIAL' || p.category === 'PACKING_MATERIAL')
     .map(p => ({ id: p.id, name: p.name, category: p.category }));
-  
-  const allGodowns = await GodownRepository.list();
-
   const safeGodowns = allGodowns.map(g => ({ id: g.id, name: g.name, type: (g as any).type || 'PADDY' }));
-
-  // Fetch pending drafts
-  const pendingDrafts = await prisma.procurementBatch.findMany({
-    where: { status: 'DRAFT' },
-    include: { supplier: true, product: true, farmer: true },
-    orderBy: { createdAt: 'desc' }
-  });
 
   // Convert Decimals to string to avoid serialization issues
   const safeDrafts = pendingDrafts.map(d => ({
@@ -68,18 +109,6 @@ export default async function WeighbridgePage({ searchParams }: { searchParams: 
     afterDryingMoisture: d.afterDryingMoisture?.toString() || '',
     createdAt: d.createdAt.toISOString()
   }));
-
-  // ─── Generate Predictive Leads from farmer history ───
-  const farmersWithHistory = await prisma.farmer.findMany({
-    include: {
-      broker: true,
-      batches: {
-        where: { status: { in: ['FINALIZED', 'PARTIALLY_PAID', 'PAID'] } },
-        include: { product: true },
-        orderBy: { createdAt: 'desc' }
-      }
-    }
-  });
 
   const allVarietySet = new Set<string>();
 

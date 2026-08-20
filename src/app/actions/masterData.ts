@@ -171,7 +171,7 @@ export async function createVehicleAction(formData: FormData): Promise<{ id: str
 
   try {
     const item = await VehicleRepository.create(parsed.data);
-    revalidatePath('/admin/master-data/vehicles');
+    revalidatePath('/operator/vehicles');
     revalidatePath('/admin/master-data');
     return { id: item.id, name: item.licensePlate };
   } catch (error) {
@@ -203,7 +203,7 @@ export async function deleteVehicleAction(formData: FormData): Promise<void> {
 
   try {
     await VehicleRepository.delete(parsed.data.id);
-    revalidatePath('/admin/master-data/vehicles');
+    revalidatePath('/operator/vehicles');
     revalidatePath('/admin/master-data');
     revalidatePath('/operator/vehicles');
   } catch (error) {

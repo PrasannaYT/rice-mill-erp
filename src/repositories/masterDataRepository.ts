@@ -1,26 +1,32 @@
 import prisma from '@/lib/prisma';
 import { type Prisma } from '@prisma/client';
+import { withMemoryCache, invalidateCache } from '@/lib/memoryCache';
 
 export class SupplierRepository {
   static async create(data: Prisma.SupplierCreateInput) {
-    return prisma.supplier.create({ data });
+    const res = await prisma.supplier.create({ data });
+    invalidateCache('supplier');
+    return res;
   }
 
   static async list() {
-    return prisma.supplier.findMany({ take: 1000, orderBy: { name: 'asc' } });
+    return withMemoryCache('supplier_list', () =>
+      prisma.supplier.findMany({ take: 1000, orderBy: { name: 'asc' } })
+    );
   }
 
   static async count() {
-    return prisma.supplier.count();
+    return withMemoryCache('supplier_count', () => prisma.supplier.count());
   }
 
   static async update(id: string, data: Prisma.SupplierUpdateInput) {
-    return prisma.supplier.update({ where: { id }, data });
+    const res = await prisma.supplier.update({ where: { id }, data });
+    invalidateCache('supplier');
+    return res;
   }
 
   static async delete(id: string) {
-    return prisma.$transaction(async (tx) => {
-      // Delete or disassociate child farmers and references
+    const res = await prisma.$transaction(async (tx) => {
       const childFarmers = await tx.farmer.findMany({ take: 1000, where: { brokerId: id }, select: { id: true } });
       const childFarmerIds = childFarmers.map(f => f.id);
 
@@ -36,80 +42,104 @@ export class SupplierRepository {
 
       return tx.supplier.delete({ where: { id } });
     });
+    invalidateCache('supplier');
+    return res;
   }
 }
 
 export class CustomerRepository {
   static async create(data: Prisma.CustomerCreateInput) {
-    return prisma.customer.create({ data });
+    const res = await prisma.customer.create({ data });
+    invalidateCache('customer');
+    return res;
   }
 
   static async list() {
-    return prisma.customer.findMany({ take: 1000, orderBy: { name: 'asc' } });
+    return withMemoryCache('customer_list', () =>
+      prisma.customer.findMany({ take: 1000, orderBy: { name: 'asc' } })
+    );
   }
 
   static async count() {
-    return prisma.customer.count();
+    return withMemoryCache('customer_count', () => prisma.customer.count());
   }
 
   static async update(id: string, data: Prisma.CustomerUpdateInput) {
-    return prisma.customer.update({ where: { id }, data });
+    const res = await prisma.customer.update({ where: { id }, data });
+    invalidateCache('customer');
+    return res;
   }
 
   static async delete(id: string) {
-    return prisma.$transaction(async (tx) => {
+    const res = await prisma.$transaction(async (tx) => {
       await tx.ledgerEntry.deleteMany({ where: { customerId: id } });
       await tx.paymentTransaction.updateMany({ where: { customerId: id }, data: { customerId: null } });
       await tx.salesInvoiceItem.deleteMany({ where: { invoice: { customerId: id } } });
       await tx.salesInvoice.deleteMany({ where: { customerId: id } });
       return tx.customer.delete({ where: { id } });
     });
+    invalidateCache('customer');
+    return res;
   }
 }
 
 export class ProductRepository {
   static async create(data: Prisma.ProductCreateInput) {
-    return prisma.product.create({ data });
+    const res = await prisma.product.create({ data });
+    invalidateCache('product');
+    return res;
   }
 
   static async list() {
-    return prisma.product.findMany({ take: 1000, orderBy: { name: 'asc' } });
+    return withMemoryCache('product_list', () =>
+      prisma.product.findMany({ take: 1000, orderBy: { name: 'asc' } })
+    );
   }
 
   static async count() {
-    return prisma.product.count();
+    return withMemoryCache('product_count', () => prisma.product.count());
   }
 
   static async update(id: string, data: Prisma.ProductUpdateInput) {
-    return prisma.product.update({ where: { id }, data });
+    const res = await prisma.product.update({ where: { id }, data });
+    invalidateCache('product');
+    return res;
   }
 
   static async delete(id: string) {
-    return prisma.$transaction(async (tx) => {
+    const res = await prisma.$transaction(async (tx) => {
       await tx.salesInvoiceItem.deleteMany({ where: { productId: id } });
       await tx.stockMovement.deleteMany({ where: { productId: id } });
       await tx.lot.deleteMany({ where: { productId: id } });
       await tx.procurementBatch.updateMany({ where: { productId: id }, data: { productId: null } });
       return tx.product.delete({ where: { id } });
     });
+    invalidateCache('product');
+    return res;
   }
 }
 
 export class GodownRepository {
   static async create(data: Prisma.GodownCreateInput) {
-    return prisma.godown.create({ data });
+    const res = await prisma.godown.create({ data });
+    invalidateCache('godown');
+    return res;
   }
   static async list() {
-    return prisma.godown.findMany({ take: 1000, orderBy: { name: 'asc' } });
+    return withMemoryCache('godown_list', () =>
+      prisma.godown.findMany({ take: 1000, orderBy: { name: 'asc' } })
+    );
   }
   static async count() {
-    return prisma.godown.count();
+    return withMemoryCache('godown_count', () => prisma.godown.count());
   }
   static async update(id: string, data: Prisma.GodownUpdateInput) {
-    return prisma.godown.update({ where: { id }, data });
+    const res = await prisma.godown.update({ where: { id }, data });
+    invalidateCache('godown');
+    return res;
   }
   static async delete(id: string) {
-    return prisma.$transaction(async (tx) => {
+    const res = await prisma.$transaction(async (tx) => {
       await tx.salesInvoiceItem.deleteMany({ where: { godownId: id } });
       await tx.stockMovement.deleteMany({ where: { OR: [{ fromGodownId: id }, { toGodownId: id }] } });
       await tx.lot.deleteMany({ where: { godownId: id } });
@@ -124,99 +154,129 @@ export class GodownRepository {
       
       return tx.godown.delete({ where: { id } });
     });
+    invalidateCache('godown');
+    return res;
   }
 }
 
 export class VehicleRepository {
   static async create(data: Prisma.VehicleCreateInput) {
-    return prisma.vehicle.create({ data });
+    const res = await prisma.vehicle.create({ data });
+    invalidateCache('vehicle');
+    return res;
   }
   static async list() {
-    return prisma.vehicle.findMany({ take: 1000, orderBy: { licensePlate: 'asc' } });
+    return withMemoryCache('vehicle_list', () =>
+      prisma.vehicle.findMany({ take: 1000, orderBy: { licensePlate: 'asc' } })
+    );
   }
   static async count() {
-    return prisma.vehicle.count();
+    return withMemoryCache('vehicle_count', () => prisma.vehicle.count());
   }
   static async update(id: string, data: Prisma.VehicleUpdateInput) {
-    return prisma.vehicle.update({ where: { id }, data });
+    const res = await prisma.vehicle.update({ where: { id }, data });
+    invalidateCache('vehicle');
+    return res;
   }
   static async delete(id: string) {
-    return prisma.$transaction(async (tx) => {
+    const res = await prisma.$transaction(async (tx) => {
       await tx.salesInvoice.updateMany({ where: { vehicleId: id }, data: { vehicleId: null } });
       await tx.procurementBatch.updateMany({ where: { vehicleId: id }, data: { vehicleId: null } });
       return tx.vehicle.delete({ where: { id } });
     });
+    invalidateCache('vehicle');
+    return res;
   }
 }
 
-
-
 export class BankRepository {
   static async create(data: Prisma.BankCreateInput) {
-    return prisma.bank.create({ data });
+    const res = await prisma.bank.create({ data });
+    invalidateCache('bank');
+    return res;
   }
   static async list() {
-    return prisma.bank.findMany({ take: 1000, orderBy: { bankName: 'asc' } });
+    return withMemoryCache('bank_list', () =>
+      prisma.bank.findMany({ take: 1000, orderBy: { bankName: 'asc' } })
+    );
   }
   static async count() {
-    return prisma.bank.count();
+    return withMemoryCache('bank_count', () => prisma.bank.count());
   }
   static async update(id: string, data: Prisma.BankUpdateInput) {
-    return prisma.bank.update({ where: { id }, data });
+    const res = await prisma.bank.update({ where: { id }, data });
+    invalidateCache('bank');
+    return res;
   }
   static async delete(id: string) {
-    return prisma.$transaction(async (tx) => {
+    const res = await prisma.$transaction(async (tx) => {
       await tx.paymentTransaction.updateMany({ where: { bankId: id }, data: { bankId: null } });
       return tx.bank.delete({ where: { id } });
     });
+    invalidateCache('bank');
+    return res;
   }
 }
 
 export class LaborerRepository {
   static async create(data: { name: string; contact?: string | null; type: string }) {
-    return prisma.laborer.create({ data });
+    const res = await prisma.laborer.create({ data });
+    invalidateCache('laborer');
+    return res;
   }
   static async list() {
-    return prisma.laborer.findMany({ take: 1000, orderBy: { name: 'asc' } });
+    return withMemoryCache('laborer_list', () =>
+      prisma.laborer.findMany({ take: 1000, orderBy: { name: 'asc' } })
+    );
   }
   static async count() {
-    return prisma.laborer.count();
+    return withMemoryCache('laborer_count', () => prisma.laborer.count());
   }
   static async update(id: string, data: Prisma.LaborerUpdateInput) {
-    return prisma.laborer.update({ where: { id }, data });
+    const res = await prisma.laborer.update({ where: { id }, data });
+    invalidateCache('laborer');
+    return res;
   }
   static async delete(id: string) {
-    return prisma.$transaction(async (tx) => {
+    const res = await prisma.$transaction(async (tx) => {
       await tx.laborWage.deleteMany({ where: { laborerId: id } });
       return tx.laborer.delete({ where: { id } });
     });
+    invalidateCache('laborer');
+    return res;
   }
 }
 
 export class FarmerRepository {
   static async list() {
-    return prisma.farmer.findMany({ take: 1000, include: { broker: true },
-      orderBy: { createdAt: 'desc' } 
-    });
+    return withMemoryCache('farmer_list', () =>
+      prisma.farmer.findMany({ take: 1000, include: { broker: true }, orderBy: { createdAt: 'desc' } })
+    );
   }
 
   static async create(data: { name: string; contact?: string | null; village?: string | null; brokerId: string }) {
-    return prisma.farmer.create({ data });
+    const res = await prisma.farmer.create({ data });
+    invalidateCache('farmer');
+    return res;
   }
 
   static async count() {
-    return prisma.farmer.count();
+    return withMemoryCache('farmer_count', () => prisma.farmer.count());
   }
 
   static async update(id: string, data: Prisma.FarmerUpdateInput) {
-    return prisma.farmer.update({ where: { id }, data });
+    const res = await prisma.farmer.update({ where: { id }, data });
+    invalidateCache('farmer');
+    return res;
   }
 
   static async delete(id: string) {
-    return prisma.$transaction(async (tx) => {
+    const res = await prisma.$transaction(async (tx) => {
       await tx.ledgerEntry.deleteMany({ where: { farmerId: id } });
       await tx.procurementBatch.updateMany({ where: { farmerId: id }, data: { farmerId: null } });
       return tx.farmer.delete({ where: { id } });
     });
+    invalidateCache('farmer');
+    return res;
   }
 }

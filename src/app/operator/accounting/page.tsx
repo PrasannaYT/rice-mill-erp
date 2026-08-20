@@ -19,65 +19,150 @@ export default async function AccountingDashboardPage() {
     redirect('/login');
   }
 
-  // Fetch balances
-  const rawCustomers = await prisma.customer.findMany({ orderBy: { name: 'asc' } });
-  const rawSuppliers = await prisma.supplier.findMany({ orderBy: { name: 'asc' } });
-  const expenses = await prisma.expenseCategory.findMany({ orderBy: { name: 'asc' } });
-  const rawBanks = await prisma.bank.findMany({ orderBy: { bankName: 'asc' } });
+  // Parallel fan-out: run all 7 initial queries concurrently
+  const [
+    rawCustomers,
+    rawSuppliers,
+    expenses,
+    rawBanks,
+    rawCashTransactions,
+    rawProcurementsAll,
+    rawPackingItemsAll,
+    rawSalesAll,
+    rawTransactions
+  ] = await Promise.all([
+    prisma.customer.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true, contact: true, gstin: true, address: true, balance: true } }),
+    prisma.supplier.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true, contact: true, gstin: true, balance: true } }),
+    prisma.expenseCategory.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
+    prisma.bank.findMany({ orderBy: { bankName: 'asc' }, select: { id: true, bankName: true, accountNumber: true, balance: true } }),
+    prisma.paymentTransaction.findMany({ where: { mode: 'CASH' }, select: { type: true, amount: true } }),
+    prisma.procurementBatch.findMany({
+      where: { status: { in: ['FINALIZED', 'PARTIALLY_PAID'] } },
+      select: {
+        id: true,
+        grossWeight: true,
+        netWeight: true,
+        numberOfBags: true,
+        perBagWeight: true,
+        farmerBagRate: true,
+        farmerTotalPayable: true,
+        brokerCommissionRate: true,
+        brokerCommissionTotal: true,
+        amountPaid: true,
+        createdAt: true,
+        supplier: { select: { id: true, name: true, contact: true, gstin: true } },
+        farmer: { select: { id: true, name: true, contact: true, village: true } },
+        product: { select: { id: true, name: true } },
+        godown: { select: { id: true, name: true } },
+        payments: { orderBy: { createdAt: 'desc' as const }, select: { id: true, amount: true, transactionDate: true } }
+      },
+      orderBy: { createdAt: 'desc' }
+    }),
+    prisma.packingItem.findMany({
+      where: { status: { in: ['FINALIZED', 'PARTIALLY_PAID'] } },
+      select: {
+        id: true,
+        brandName: true,
+        capacityKg: true,
+        quantityBags: true,
+        initialQuantityBags: true,
+        perBagRate: true,
+        amountPaid: true,
+        createdAt: true,
+        godown: { select: { id: true, name: true } },
+        supplier: { select: { id: true, name: true, contact: true, gstin: true } },
+        payments: { orderBy: { createdAt: 'desc' as const }, select: { id: true, amount: true, transactionDate: true } }
+      },
+      orderBy: { createdAt: 'desc' }
+    }),
+    prisma.salesInvoice.findMany({
+      where: { status: { in: ['FINALIZED', 'PARTIALLY_PAID'] } },
+      select: {
+        id: true,
+        invoiceNumber: true,
+        subtotal: true,
+        taxTotal: true,
+        grandTotal: true,
+        amountPaid: true,
+        status: true,
+        createdAt: true,
+        transportFreightAmount: true,
+        customer: { select: { id: true, name: true, contact: true, gstin: true, address: true, balance: true } },
+        vehicle: { select: { id: true, licensePlate: true } },
+        payments: {
+          orderBy: { createdAt: 'desc' as const },
+          select: { id: true, amount: true, mode: true, createdAt: true, transactionDate: true },
+        },
+        items: {
+          select: {
+            id: true,
+            quantity: true,
+            rate: true,
+            gstRate: true,
+            lineTotal: true,
+            taxAmount: true,
+            packingItemName: true,
+            product: { select: { name: true, category: true } },
+            godown: { select: { name: true } },
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    }),
+    prisma.paymentTransaction.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 30,
+      select: {
+        id: true,
+        type: true,
+        mode: true,
+        amount: true,
+        referenceNumber: true,
+        notes: true,
+        createdAt: true,
+        customer: { select: { name: true } },
+        supplier: { select: { name: true } },
+        expenseCategory: { select: { id: true, name: true } },
+        bank: { select: { bankName: true } },
+        user: { select: { name: true } },
+        procurementBatch: { select: { id: true, status: true } },
+        salesInvoice: { select: { id: true, status: true } },
+        packingItem: { select: { id: true, status: true } },
+      }
+    })
+  ]);
 
   const totalAR = rawCustomers.reduce((sum, c) => sum + Number(c.balance), 0);
   const totalAP = rawSuppliers.reduce((sum, s) => sum + Number(s.balance), 0);
   const totalBankBalance = rawBanks.reduce((sum, b) => sum + Number(b.balance), 0);
 
-  const rawCashTransactions = await prisma.paymentTransaction.findMany({
-    where: { mode: 'CASH' }
-  });
-  
   const totalCashInHand = rawCashTransactions.reduce((acc, tx) => {
     if (tx.type === 'RECEIPT') return acc + Number(tx.amount);
     if (tx.type === 'PAYMENT') return acc - Number(tx.amount);
     return acc;
   }, 0);
 
-  // Fetch pending procurement batches awaiting cashier payment confirmation
-  const rawProcurementsAll = await prisma.procurementBatch.findMany({
-    where: { status: { in: ['FINALIZED', 'PARTIALLY_PAID'] } },
-    include: {
-      supplier: true,
-      farmer: true,
-      payments: { orderBy: { createdAt: 'desc' } },
-      product: true,
-      godown: true,
-    },
-    orderBy: { createdAt: 'desc' }
-  });
-
+  // Background non-blocking status updates
+  const procUpdateIds: string[] = [];
   const rawProcurements = [];
   for (const b of rawProcurementsAll) {
     const total = Number(b.farmerTotalPayable || 0) + Number(b.brokerCommissionTotal || 0);
     const paid = Number(b.amountPaid || 0);
     const remaining = Math.round((total - paid) * 100) / 100;
     if (remaining <= 0) {
-      await prisma.procurementBatch.update({
-        where: { id: b.id },
-        data: { status: 'PAID', fullyPaidAt: new Date() }
-      }).catch(console.error);
+      procUpdateIds.push(b.id);
     } else {
       rawProcurements.push(b);
     }
   }
+  if (procUpdateIds.length > 0) {
+    prisma.procurementBatch.updateMany({
+      where: { id: { in: procUpdateIds } },
+      data: { status: 'PAID', fullyPaidAt: new Date() }
+    }).catch(console.error);
+  }
 
-  // Fetch pending packing material procurements awaiting cashier payment confirmation
-  const rawPackingItemsAll = await prisma.packingItem.findMany({
-    where: { status: { in: ['FINALIZED', 'PARTIALLY_PAID'] } },
-    include: {
-      godown: true,
-      supplier: true,
-      payments: { orderBy: { createdAt: 'desc' } },
-    },
-    orderBy: { createdAt: 'desc' }
-  });
-
+  const packingUpdateIds: string[] = [];
   const rawPackingItems = [];
   for (const p of rawPackingItemsAll) {
     const originalBags = Number(p.initialQuantityBags) > 0 ? Number(p.initialQuantityBags) : Number(p.quantityBags);
@@ -85,62 +170,36 @@ export default async function AccountingDashboardPage() {
     const paid = Number(p.amountPaid || 0);
     const remaining = Math.round((total - paid) * 100) / 100;
     if (remaining <= 0) {
-      await prisma.packingItem.update({
-        where: { id: p.id },
-        data: { status: 'PAID', fullyPaidAt: new Date() }
-      }).catch(console.error);
+      packingUpdateIds.push(p.id);
     } else {
       rawPackingItems.push(p);
     }
   }
+  if (packingUpdateIds.length > 0) {
+    prisma.packingItem.updateMany({
+      where: { id: { in: packingUpdateIds } },
+      data: { status: 'PAID', fullyPaidAt: new Date() }
+    }).catch(console.error);
+  }
 
-  // Fetch pending sales invoices awaiting cashier receipt confirmation
-  const rawSalesAll = await prisma.salesInvoice.findMany({
-    where: { status: { in: ['FINALIZED', 'PARTIALLY_PAID'] } },
-    include: {
-      customer: true,
-      vehicle: true,
-      payments: { orderBy: { createdAt: 'desc' } },
-      items: {
-        include: {
-          product: true,
-          godown: true,
-        }
-      }
-    },
-    orderBy: { createdAt: 'desc' }
-  });
-
+  const salesUpdateIds: string[] = [];
   const rawSales = [];
   for (const s of rawSalesAll) {
     const total = Number(s.grandTotal || 0);
     const paid = Number(s.amountPaid || 0);
     const remaining = Math.round((total - paid) * 100) / 100;
     if (remaining <= 0) {
-      await prisma.salesInvoice.update({
-        where: { id: s.id },
-        data: { status: 'PAID', fullyPaidAt: new Date() }
-      }).catch(console.error);
+      salesUpdateIds.push(s.id);
     } else {
       rawSales.push(s);
     }
   }
-
-  // Fetch recent transactions
-  const rawTransactions = await prisma.paymentTransaction.findMany({
-    orderBy: { createdAt: 'desc' },
-    take: 30,
-    include: {
-      customer: true,
-      supplier: true,
-      expenseCategory: true,
-      bank: true,
-      user: true,
-      procurementBatch: { select: { id: true, status: true } },
-      salesInvoice: { select: { id: true, status: true } },
-      packingItem: { select: { id: true, status: true } },
-    }
-  });
+  if (salesUpdateIds.length > 0) {
+    prisma.salesInvoice.updateMany({
+      where: { id: { in: salesUpdateIds } },
+      data: { status: 'PAID', fullyPaidAt: new Date() }
+    }).catch(console.error);
+  }
 
   const transactions = rawTransactions.map(tx => ({
     id: tx.id,

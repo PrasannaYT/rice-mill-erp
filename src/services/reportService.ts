@@ -101,28 +101,44 @@ export class ReportService {
         },
       }),
 
-      // 3. AR Aging
+      // 3. AR Aging — only fetch the fields needed for aging calculation
       prisma.salesInvoice.findMany({
         where: { status: { in: ['DRAFT', 'FINALIZED', 'PARTIALLY_PAID'] } },
-        include: { customer: true },
+        select: {
+          id: true,
+          invoiceNumber: true,
+          grandTotal: true,
+          amountPaid: true,
+          createdAt: true,
+          customer: { select: { name: true } },
+        },
       }),
 
-      // 4. Supplier pricing trends
+      // 4. Supplier pricing trends — limit to last 500 batches to prevent unbounded scan
       prisma.procurementBatch.findMany({
         where: { status: { not: 'DRAFT' }, ratePerKg: { not: null } },
         orderBy: { createdAt: 'asc' },
         select: { createdAt: true, ratePerKg: true },
+        take: 500,
       }),
 
-      // 5. Inventory valuation
+      // 5. Inventory valuation — select only needed fields
       prisma.lot.findMany({
         where: { currentQuantity: { gt: 0 } },
-        include: { product: true, godown: true },
+        select: {
+          id: true,
+          currentQuantity: true,
+          godownId: true,
+          product: { select: { name: true, category: true } },
+          godown: { select: { name: true, location: true, type: true } },
+        },
       }),
 
-      // 6. Vehicle profitability
+      // 6. Vehicle profitability — select only needed fields
       prisma.vehicle.findMany({
-        include: {
+        select: {
+          id: true,
+          licensePlate: true,
           invoices: { select: { transportFreightAmount: true } },
           payments: { select: { amount: true } },
         },
@@ -176,10 +192,18 @@ export class ReportService {
         _sum: { totalWage: true },
       }),
 
-      // 14. Packing Items
+      // 14. Packing Items — select only needed fields
       prisma.packingItem.findMany({
         where: { quantityBags: { gt: 0 } },
-        include: { godown: true }
+        select: {
+          id: true,
+          brandName: true,
+          capacityKg: true,
+          quantityBags: true,
+          perBagRate: true,
+          godownId: true,
+          godown: { select: { name: true, location: true, type: true } },
+        },
       }),
 
       // 15. Spare Parts

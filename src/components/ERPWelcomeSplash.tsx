@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { FastForward, Play, Pause, Volume2, VolumeX, Sparkles, Wheat, CheckCircle2, Cpu, ShieldCheck } from 'lucide-react';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 
 interface ERPWelcomeSplashProps {
   userName?: string;
@@ -12,12 +12,14 @@ interface ERPWelcomeSplashProps {
 
 export default function ERPWelcomeSplash({ userName = 'Operator', role = 'ERP User', onComplete }: ERPWelcomeSplashProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const [isPlaying, setIsPlaying] = useState(true);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
   const [progress, setProgress] = useState(0);
   const [isExiting, setIsExiting] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
 
-  const triggerExit = () => {
+  const triggerExit = useCallback(() => {
     if (isExiting) return;
     setIsExiting(true);
     setTimeout(() => {
@@ -26,10 +28,40 @@ export default function ERPWelcomeSplash({ userName = 'Operator', role = 'ERP Us
       }
       if (onComplete) onComplete();
     }, 750);
-  };
+  }, [isExiting, onComplete]);
 
+  // Lazy-load video only when component is visible (IntersectionObserver)
+  useEffect(() => {
+    const container = containerRef.current;
+    const video = videoRef.current;
+    if (!container || !video) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && !videoReady) {
+          // Start loading the video only when the splash is visible
+          video.preload = 'auto';
+          video.load();
+          setVideoReady(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [videoReady]);
+
+  // Play video once it's ready, handle progress and auto-exit
   useEffect(() => {
     const video = videoRef.current;
+    if (!videoReady || !video) return;
+
+    // Start playback once enough data is buffered
+    const handleCanPlay = () => {
+      video.play().then(() => setIsPlaying(true)).catch(() => null);
+    };
 
     // Force start exit transition at 8.25s so transition finishes right at 9s
     const auto9sTimer = setTimeout(() => {
@@ -49,19 +81,22 @@ export default function ERPWelcomeSplash({ userName = 'Operator', role = 'ERP Us
       triggerExit();
     };
 
-    if (video) {
-      video.addEventListener('timeupdate', handleTimeUpdate);
-      video.addEventListener('ended', handleEnded);
+    video.addEventListener('canplay', handleCanPlay);
+    video.addEventListener('timeupdate', handleTimeUpdate);
+    video.addEventListener('ended', handleEnded);
+
+    // If video is already ready (cached), trigger immediately
+    if (video.readyState >= 3) {
+      handleCanPlay();
     }
 
     return () => {
       clearTimeout(auto9sTimer);
-      if (video) {
-        video.removeEventListener('timeupdate', handleTimeUpdate);
-        video.removeEventListener('ended', handleEnded);
-      }
+      video.removeEventListener('canplay', handleCanPlay);
+      video.removeEventListener('timeupdate', handleTimeUpdate);
+      video.removeEventListener('ended', handleEnded);
     };
-  }, [onComplete, isExiting]);
+  }, [videoReady, triggerExit]);
 
   const togglePlay = () => {
     const video = videoRef.current;
@@ -93,6 +128,7 @@ export default function ERPWelcomeSplash({ userName = 'Operator', role = 'ERP Us
 
   return (
     <motion.div
+      ref={containerRef}
       initial={{ opacity: 0, scale: 1 }}
       animate={isExiting ? { opacity: 0, scale: 1.25, filter: 'blur(30px)' } : { opacity: 1, scale: 1, filter: 'blur(0px)' }}
       transition={{ duration: 0.75, ease: [0.16, 1, 0.3, 1] }}
@@ -103,7 +139,8 @@ export default function ERPWelcomeSplash({ userName = 'Operator', role = 'ERP Us
         <video
           ref={videoRef}
           src="/give_that_video.mp4"
-          autoPlay
+          preload="none"
+          poster="/ricemill_theme_cinematic.png"
           playsInline
           muted={isMuted}
           className="w-full h-full object-cover filter brightness-105 contrast-105"

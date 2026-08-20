@@ -2,11 +2,13 @@
   "name": "Rice Mill ERP",
   "short_name": "Rice ERP",
   "description": "Modern Neo-Brutalist Rice Mill Management System",
-  "start_url": "/",
+  "start_url": "/dashboard",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#F3F2EE",
-  "theme_color": "#0D0D0B",
+  "background_color": "#0A0A0A",
+  "theme_color": "#F5A623",
   "orientation": "portrait",
+  "categories": ["business", "productivity"],
   "icons": [
     {
       "src": "/favicon.ico",
