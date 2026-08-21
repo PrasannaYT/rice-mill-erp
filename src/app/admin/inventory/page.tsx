@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import prisma from "@/lib/prisma";
 import { PackingItemRepository } from "@/repositories/packingItemRepository";
 import InventoryDashboardClient from "@/components/InventoryDashboardClient";
+import { withMemoryCache } from "@/lib/memoryCache";
 
 export const metadata = {
   title: 'Inventory Hub - Rice Mill ERP',
@@ -17,7 +18,7 @@ export default async function AdminInventoryPage({ searchParams }: { searchParam
     redirect('/dashboard');
   }
 
-  // Parallel fan-out: execute all 9 independent database queries concurrently with error fallbacks
+  // Rapid reload protection: wrap database queries with 3-second RAM cache
   const [
     suppliers,
     products,
@@ -28,7 +29,7 @@ export default async function AdminInventoryPage({ searchParams }: { searchParam
     procurementBatchesForMovements,
     sparePartsRaw,
     rawScrapEntries
-  ] = await Promise.all([
+  ] = await withMemoryCache('admin:inventory:page-data', () => Promise.all([
     prisma.supplier.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }).catch(() => []),
     prisma.product.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true, category: true, unit: true, hsnCode: true, gstRate: true } }).catch(() => []),
     prisma.godown.findMany({
@@ -111,7 +112,7 @@ export default async function AdminInventoryPage({ searchParams }: { searchParam
       include: { sparePart: true },
       orderBy: { createdAt: 'desc' }
     }).catch(() => [])
-  ]);
+  ]), 3000);
 
   const safeStockMovements = stockMovements.map(m => ({
     id: m.id,
