@@ -34,9 +34,8 @@ export default function LoginForm() {
         if (typeof window !== 'undefined') {
           sessionStorage.removeItem('erpsplash_shown');
           localStorage.setItem('ricemill_last_active_timestamp', Date.now().toString());
+          window.location.href = '/dashboard';
         }
-        router.push('/dashboard');
-        router.refresh();
       }
     } catch {
       setError('An unexpected error occurred. Please try again.');
