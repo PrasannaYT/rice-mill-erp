@@ -31,6 +31,15 @@ export default function AddPackagingStockModal({ isOpen, onClose, godowns, suppl
   const parsedRate = parseFloat(perBagRate) || 0;
   const totalValue = parsedBags * parsedRate;
 
+  // Filter godowns to show Packaging godowns
+  const packagingGodowns = godowns.filter(g => {
+    const gType = (g.type || '').toUpperCase();
+    const gName = (g.name || '').toLowerCase();
+    return gType === 'PACKAGING' || gName.includes('pack') || gName.includes('bag');
+  });
+
+  const displayGodowns = packagingGodowns.length > 0 ? packagingGodowns : godowns;
+
   const finalBrandName = brandName === 'NEW' ? customBrandName.trim() : brandName.trim();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -182,8 +191,8 @@ export default function AddPackagingStockModal({ isOpen, onClose, godowns, suppl
                   onChange={e => setGodownId(e.target.value)}
                   required
                 >
-                  <option value="">Select Godown...</option>
-                  {godowns.map(g => (
+                  <option value="">Select Packaging Godown...</option>
+                  {displayGodowns.map(g => (
                     <option key={g.id} value={g.id}>{g.name}</option>
                   ))}
                 </Select>
