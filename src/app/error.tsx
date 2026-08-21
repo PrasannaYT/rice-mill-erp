@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { RefreshCw, AlertTriangle } from 'lucide-react';
 
 export default function Error({
@@ -10,9 +10,24 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const [isRetrying, setIsRetrying] = useState(false);
+
   useEffect(() => {
     console.error('App Route Error:', error);
   }, [error]);
+
+  const handleRetry = () => {
+    setIsRetrying(true);
+    try {
+      reset();
+    } catch {
+      // fallback
+    }
+    // Hard refresh to clear any stagnant serverless connection states or router caches
+    if (typeof window !== 'undefined') {
+      window.location.reload();
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-white flex items-center justify-center p-4">
@@ -30,11 +45,12 @@ export default function Error({
         </div>
 
         <button
-          onClick={() => reset()}
-          className="w-full py-3 bg-[#F5A623] hover:bg-[#e0951c] text-black font-black rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+          onClick={handleRetry}
+          disabled={isRetrying}
+          className="w-full py-3 bg-[#F5A623] hover:bg-[#e0951c] text-black font-black rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50"
         >
-          <RefreshCw className="w-4 h-4 animate-spin-hover" />
-          Retry Loading Module
+          <RefreshCw className={`w-4 h-4 ${isRetrying ? 'animate-spin' : ''}`} />
+          {isRetrying ? 'Reloading Module...' : 'Retry Loading Module'}
         </button>
       </div>
     </div>
