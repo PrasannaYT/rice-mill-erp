@@ -1,7 +1,7 @@
 import { ArrowLeft } from "lucide-react";
 import Link from 'next/link';
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { SupplierRepository, ProductRepository, GodownRepository } from "@/repositories/masterDataRepository";
 import WeighbridgeForm from "@/components/WeighbridgeForm";

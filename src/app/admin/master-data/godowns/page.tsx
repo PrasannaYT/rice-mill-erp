@@ -1,5 +1,5 @@
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { GodownRepository } from "@/repositories/masterDataRepository";
 import { createGodownAction, updateGodownAction, deleteGodownAction } from "@/app/actions/masterData";

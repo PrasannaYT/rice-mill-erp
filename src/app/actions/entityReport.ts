@@ -1,7 +1,7 @@
 'use server';
 
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 import { ReportService } from "@/services/reportService";
 
 async function checkAuth() {

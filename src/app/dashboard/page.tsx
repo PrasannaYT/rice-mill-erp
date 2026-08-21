@@ -1,5 +1,5 @@
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import prisma from "@/lib/prisma";
@@ -13,7 +13,6 @@ import {
 import { ReportService } from "@/services/reportService";
 import { AppHeader } from "@/components/ui/AppHeader";
 import DashboardWelcomeWrapper from "@/components/DashboardWelcomeWrapper";
-import { getServerSession as gss } from "next-auth";
 
 export const dynamic = 'force-dynamic';
 
@@ -34,7 +33,7 @@ export default async function DashboardPage() {
     redirect('/login');
   }
 
-  const role = session.user?.role;
+  const role = session.user?.role ?? '';
   const settings = await prisma.globalSetting.findMany().catch(() => []);
   
   const isModuleEnabled = (key: string) => {
@@ -184,12 +183,12 @@ export default async function DashboardPage() {
         ]
       },
       select: { licensePlate: true }
-    }),
+    }).catch(() => []),
     ReportService.generatePnL().catch(() => null),
     prisma.salesInvoice.count({
       where: { status: { in: ['FINALIZED', 'PARTIALLY_PAID'] } }
-    }),
-    prisma.laborer.count(),
+    }).catch(() => 0),
+    prisma.laborer.count().catch(() => 0),
   ]);
 
   const today = new Date();

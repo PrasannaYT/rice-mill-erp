@@ -1,7 +1,7 @@
 'use server';
 
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 import { InventoryService } from "@/services/inventoryService";
 import { revalidatePath } from "next/cache";
 
