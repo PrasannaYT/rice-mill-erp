@@ -93,7 +93,7 @@ export default function LoginForm() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="admin@ricemill.com"
+              placeholder="admin@mill.com"
               required
               className="pl-10 bg-neutral-900/80 border-white/10 text-white placeholder:text-neutral-600 focus:border-amber-500/50"
             />
