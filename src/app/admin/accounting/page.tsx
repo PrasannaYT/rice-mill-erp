@@ -19,7 +19,7 @@ export default async function AccountingDashboardPage() {
     redirect('/dashboard');
   }
 
-  // Parallel fan-out: run all 9 initial queries concurrently
+  // Parallel fan-out: run all 9 initial queries concurrently with error fallbacks
   const [
     rawCustomers,
     rawSuppliers,
@@ -31,11 +31,11 @@ export default async function AccountingDashboardPage() {
     rawSalesAll,
     rawTransactions
   ] = await Promise.all([
-    prisma.customer.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true, contact: true, gstin: true, address: true, balance: true } }),
-    prisma.supplier.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true, contact: true, gstin: true, balance: true } }),
-    prisma.expenseCategory.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
-    prisma.bank.findMany({ orderBy: { bankName: 'asc' }, select: { id: true, bankName: true, accountNumber: true, balance: true } }),
-    prisma.paymentTransaction.findMany({ where: { mode: 'CASH' }, select: { type: true, amount: true } }),
+    prisma.customer.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true, contact: true, gstin: true, address: true, balance: true } }).catch(() => []),
+    prisma.supplier.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true, contact: true, gstin: true, balance: true } }).catch(() => []),
+    prisma.expenseCategory.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }).catch(() => []),
+    prisma.bank.findMany({ orderBy: { bankName: 'asc' }, select: { id: true, bankName: true, accountNumber: true, balance: true } }).catch(() => []),
+    prisma.paymentTransaction.findMany({ where: { mode: 'CASH' }, select: { type: true, amount: true } }).catch(() => []),
     prisma.procurementBatch.findMany({
       where: { status: { in: ['FINALIZED', 'PARTIALLY_PAID'] } },
       select: {
@@ -57,7 +57,7 @@ export default async function AccountingDashboardPage() {
         payments: { orderBy: { createdAt: 'desc' as const }, select: { id: true, amount: true, transactionDate: true } }
       },
       orderBy: { createdAt: 'desc' }
-    }),
+    }).catch(() => []),
     prisma.packingItem.findMany({
       where: { status: { in: ['FINALIZED', 'PARTIALLY_PAID'] } },
       select: {
@@ -74,7 +74,7 @@ export default async function AccountingDashboardPage() {
         payments: { orderBy: { createdAt: 'desc' as const }, select: { id: true, amount: true, transactionDate: true } }
       },
       orderBy: { createdAt: 'desc' }
-    }),
+    }).catch(() => []),
     prisma.salesInvoice.findMany({
       where: { status: { in: ['FINALIZED', 'PARTIALLY_PAID'] } },
       select: {
@@ -108,7 +108,7 @@ export default async function AccountingDashboardPage() {
         }
       },
       orderBy: { createdAt: 'desc' }
-    }),
+    }).catch(() => []),
     prisma.paymentTransaction.findMany({
       orderBy: { createdAt: 'desc' },
       take: 100,
@@ -129,7 +129,7 @@ export default async function AccountingDashboardPage() {
         salesInvoice: { select: { id: true, status: true } },
         packingItem: { select: { id: true, status: true } },
       }
-    })
+    }).catch(() => [])
   ]);
 
   const totalAR = rawCustomers.reduce((sum, c) => sum + Number(c.balance), 0);

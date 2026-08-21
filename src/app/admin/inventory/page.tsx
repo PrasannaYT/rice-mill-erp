@@ -17,7 +17,7 @@ export default async function AdminInventoryPage({ searchParams }: { searchParam
     redirect('/dashboard');
   }
 
-  // Parallel fan-out: execute all 7 independent database queries concurrently
+  // Parallel fan-out: execute all 9 independent database queries concurrently with error fallbacks
   const [
     suppliers,
     products,
@@ -25,10 +25,12 @@ export default async function AdminInventoryPage({ searchParams }: { searchParam
     stockMovements,
     rawPackingItems,
     salesInvoiceItems,
-    procurementBatchesForMovements
+    procurementBatchesForMovements,
+    sparePartsRaw,
+    rawScrapEntries
   ] = await Promise.all([
-    prisma.supplier.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
-    prisma.product.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true, category: true, unit: true, hsnCode: true, gstRate: true } }),
+    prisma.supplier.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }).catch(() => []),
+    prisma.product.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true, category: true, unit: true, hsnCode: true, gstRate: true } }).catch(() => []),
     prisma.godown.findMany({
       include: {
         lots: {
@@ -50,7 +52,7 @@ export default async function AdminInventoryPage({ searchParams }: { searchParam
         }
       },
       orderBy: { name: 'asc' }
-    }),
+    }).catch(() => []),
     prisma.stockMovement.findMany({
       orderBy: { createdAt: 'desc' },
       take: 30,
@@ -65,8 +67,8 @@ export default async function AdminInventoryPage({ searchParams }: { searchParam
         fromGodown: { select: { name: true } },
         toGodown: { select: { name: true } }
       }
-    }),
-    PackingItemRepository.list(),
+    }).catch(() => []),
+    PackingItemRepository.list().catch(() => []),
     prisma.salesInvoiceItem.findMany({
       where: { packingItemName: { not: null } },
       select: {
@@ -76,7 +78,7 @@ export default async function AdminInventoryPage({ searchParams }: { searchParam
         invoice: { select: { createdAt: true, invoiceNumber: true } },
         godown: { select: { name: true } }
       }
-    }),
+    }).catch(() => []),
     prisma.procurementBatch.findMany({
       where: { status: 'FINALIZED', deletedAt: null },
       select: {
@@ -93,7 +95,22 @@ export default async function AdminInventoryPage({ searchParams }: { searchParam
       },
       orderBy: { createdAt: 'desc' },
       take: 50
-    })
+    }).catch(() => []),
+    prisma.sparePart.findMany({
+      where: {
+        deletedAt: null,
+        OR: [
+          { availableQty: { gt: 0 } },
+          { inUseQty: { gt: 0 } }
+        ]
+      },
+      orderBy: { name: 'asc' }
+    }).catch(() => []),
+    prisma.scrapEntry.findMany({
+      where: { status: 'ACCUMULATED' },
+      include: { sparePart: true },
+      orderBy: { createdAt: 'desc' }
+    }).catch(() => [])
   ]);
 
   const safeStockMovements = stockMovements.map(m => ({
@@ -215,23 +232,6 @@ export default async function AdminInventoryPage({ searchParams }: { searchParam
     }))
   }));
 
-  const spareParts = await prisma.sparePart.findMany({
-    where: {
-      deletedAt: null,
-      OR: [
-        { availableQty: { gt: 0 } },
-        { inUseQty: { gt: 0 } }
-      ]
-    },
-    orderBy: { name: 'asc' }
-  });
-  
-  const rawScrapEntries = await prisma.scrapEntry.findMany({
-    where: { status: 'ACCUMULATED' },
-    include: { sparePart: true },
-    orderBy: { createdAt: 'desc' }
-  });
-
   const scrapEntries = rawScrapEntries.map(entry => ({
     id: entry.id,
     sparePartName: entry.sparePart?.name || 'Unknown Part',
@@ -250,7 +250,7 @@ export default async function AdminInventoryPage({ searchParams }: { searchParam
         packingItems={packingItems}
         stockMovements={allSafeStockMovements}
         editPackingId={params?.editPackingId}
-        spareParts={spareParts.map(s => ({
+        spareParts={sparePartsRaw.map(s => ({
           id: s.id,
           name: s.name,
           category: s.category,

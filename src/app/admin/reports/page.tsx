@@ -35,10 +35,40 @@ export default async function ReportsDashboardPage() {
     redirect('/dashboard');
   }
 
-  const [pnl, advanced] = await Promise.all([
-    ReportService.generatePnL(),
-    ReportService.getAdvancedAnalytics(),
+  const defaultPnL = {
+    revenue: 0,
+    cogs: { procurement: 0, labor: 0, total: 0 },
+    grossProfit: 0,
+    netProfit: 0,
+    netMarginPercentage: 0,
+  };
+
+  const defaultAdvanced = {
+    yieldAnalytics: [],
+    expenseBreakdown: [],
+    arAging: [],
+    arSummary: [],
+    supplierTrends: [],
+    valuation: [],
+    godownValuationSummary: [],
+    totalValuation: 0,
+    vehicleProfitability: [],
+    salesVelocity: [],
+    hamaliEfficiency: { totalWage: 0, totalTons: 0, costPerTon: 0 },
+    brokerStats: [],
+    monthlySales: [],
+    paymentModeBreakdown: [],
+    millingSessionCount: 0,
+    laborBreakdown: [],
+  };
+
+  const [pnlRes, advancedRes] = await Promise.all([
+    ReportService.generatePnL().catch(() => defaultPnL),
+    ReportService.getAdvancedAnalytics().catch(() => defaultAdvanced),
   ]);
+
+  const pnl = pnlRes || defaultPnL;
+  const advanced = advancedRes || defaultAdvanced;
 
   const isProfitable = pnl.netProfit >= 0;
   const grossMarginPct = pnl.revenue > 0 ? ((pnl.grossProfit / pnl.revenue) * 100).toFixed(1) : '0.0';

@@ -36,13 +36,13 @@ export default async function MasterDataPage() {
     laborersCount,
     farmersCount
   ] = await Promise.all([
-    SupplierRepository.count(),
-    CustomerRepository.count(),
-    ProductRepository.count(),
-    GodownRepository.count(),
-    BankRepository.count(),
-    LaborerRepository.count(),
-    FarmerRepository.count()
+    SupplierRepository.count().catch(() => 0),
+    CustomerRepository.count().catch(() => 0),
+    ProductRepository.count().catch(() => 0),
+    GodownRepository.count().catch(() => 0),
+    BankRepository.count().catch(() => 0),
+    LaborerRepository.count().catch(() => 0),
+    FarmerRepository.count().catch(() => 0)
   ]);
 
   const cards = [
