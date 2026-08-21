@@ -1,52 +1,53 @@
 import prisma from '@/lib/prisma';
 import Decimal from 'decimal.js';
-import { unstable_cache } from 'next/cache';
+import { withMemoryCache } from '@/lib/memoryCache';
 
 export class ReportService {
   static async generatePnL() {
-    // Run all three independent aggregate queries in parallel
-    const [sales, purchases, wages] = await Promise.all([
-      prisma.salesInvoice.aggregate({
-        _sum: { subtotal: true },
-        where: { status: { not: 'DRAFT' } },
-      }),
-      prisma.procurementBatch.aggregate({
-        _sum: { totalPayable: true },
-      }),
-      prisma.laborWage.aggregate({
-        _sum: { totalWage: true },
-      }),
-    ]);
+    return withMemoryCache('report:pnl', async () => {
+      const [sales, purchases, wages] = await Promise.all([
+        prisma.salesInvoice.aggregate({
+          _sum: { subtotal: true },
+          where: { status: { not: 'DRAFT' } },
+        }).catch(() => ({ _sum: { subtotal: 0 } })),
+        prisma.procurementBatch.aggregate({
+          _sum: { totalPayable: true },
+        }).catch(() => ({ _sum: { totalPayable: 0 } })),
+        prisma.laborWage.aggregate({
+          _sum: { totalWage: true },
+        }).catch(() => ({ _sum: { totalWage: 0 } })),
+      ]);
 
-    const revenue = new Decimal(sales._sum.subtotal || 0);
-    const procurementCost = new Decimal(purchases._sum.totalPayable || 0);
-    const laborCost = new Decimal(wages._sum.totalWage || 0);
+      const revenue = new Decimal(sales._sum?.subtotal || 0);
+      const procurementCost = new Decimal(purchases._sum?.totalPayable || 0);
+      const laborCost = new Decimal(wages._sum?.totalWage || 0);
 
-    const cogs = procurementCost.plus(laborCost);
-    const grossProfit = revenue.minus(cogs);
-    const netProfit = grossProfit;
-    const margin = revenue.gt(0)
-      ? netProfit.dividedBy(revenue).times(100)
-      : new Decimal(0);
+      const cogs = procurementCost.plus(laborCost);
+      const grossProfit = revenue.minus(cogs);
+      const netProfit = grossProfit;
+      const margin = revenue.gt(0)
+        ? netProfit.dividedBy(revenue).times(100)
+        : new Decimal(0);
 
-    return {
-      revenue: revenue.toNumber(),
-      cogs: {
-        procurement: procurementCost.toNumber(),
-        labor: laborCost.toNumber(),
-        total: cogs.toNumber(),
-      },
-      grossProfit: grossProfit.toNumber(),
-      netProfit: netProfit.toNumber(),
-      netMarginPercentage: margin.toNumber(),
-    };
+      return {
+        revenue: revenue.toNumber(),
+        cogs: {
+          procurement: procurementCost.toNumber(),
+          labor: laborCost.toNumber(),
+          total: cogs.toNumber(),
+        },
+        grossProfit: grossProfit.toNumber(),
+        netProfit: netProfit.toNumber(),
+        netMarginPercentage: margin.toNumber(),
+      };
+    }, 5000);
   }
 
   /**
-   * Heavy analytics function — fetches 100% live data directly from database via parallel Promise.all.
+   * Heavy analytics function — served from Node.js RAM cache (~5ms) with a 5-second TTL.
    */
   static async getAdvancedAnalytics() {
-    return ReportService._getAdvancedAnalyticsRaw();
+    return withMemoryCache('report:advanced-analytics', () => ReportService._getAdvancedAnalyticsRaw(), 5000);
   }
 
   /**
