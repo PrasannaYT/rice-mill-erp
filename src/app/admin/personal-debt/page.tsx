@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { PersonalDebtRepository } from "@/repositories/personalDebtRepository";
 import PersonalDebtDashboardClient from "@/components/PersonalDebtDashboardClient";
 import { AppHeader } from "@/components/ui/AppHeader";
+import { withMemoryCache } from "@/lib/memoryCache";
 
 export const metadata = {
   title: 'Personal Debt Portfolio - Rice Mill ERP',
@@ -16,7 +17,7 @@ export default async function PersonalDebtPage() {
     redirect('/dashboard');
   }
 
-  const loans = await PersonalDebtRepository.listLoans().catch(() => []);
+  const loans = await withMemoryCache('admin:personal-debt:list', () => PersonalDebtRepository.listLoans().catch(() => []), 3000);
 
   // Convert Decimals to numbers for the client component
   const formattedLoans = loans.map(loan => {

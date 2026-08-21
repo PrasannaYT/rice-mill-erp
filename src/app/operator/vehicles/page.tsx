@@ -4,8 +4,8 @@ import { redirect } from "next/navigation";
 import { VehicleRepository } from "@/repositories/masterDataRepository";
 import VehicleManagementModule from "@/components/VehicleManagementModule";
 import prisma from "@/lib/prisma";
-
 import { AppHeader } from "@/components/ui/AppHeader";
+import { withMemoryCache } from "@/lib/memoryCache";
 
 export default async function VehiclesPage() {
   const session = await getServerSession(authOptions);
@@ -14,7 +14,7 @@ export default async function VehiclesPage() {
     redirect('/dashboard');
   }
 
-  const [vehicles, drivers, banks, expenses] = await Promise.all([
+  const [vehicles, drivers, banks, expenses] = await withMemoryCache('operator:vehicles:page-data', () => Promise.all([
     VehicleRepository.list().catch(() => []),
     prisma.laborer.findMany({
       where: { type: 'DRIVER' },
@@ -27,7 +27,7 @@ export default async function VehiclesPage() {
       where: { type: 'EXPENSE' },
       select: { id: true, name: true }
     }).catch(() => [])
-  ]);
+  ]), 3000);
 
   // We map the Date objects to string for Client Components to avoid serialization errors
   const serializedVehicles = vehicles.map(v => ({

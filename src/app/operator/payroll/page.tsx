@@ -5,8 +5,8 @@ import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import prisma from "@/lib/prisma";
 import PayrollForm from "@/components/PayrollForm";
-
 import { AppHeader } from "@/components/ui/AppHeader";
+import { withMemoryCache } from "@/lib/memoryCache";
 
 export const metadata = {
   title: 'Hamali & Payroll Desk - Rice Mill ERP',
@@ -19,7 +19,7 @@ export default async function PayrollPage() {
     redirect('/login');
   }
 
-  const [laborers, banks] = await Promise.all([
+  const [laborers, banks] = await withMemoryCache('operator:payroll:page-data', () => Promise.all([
     prisma.laborer.findMany({
       orderBy: { name: 'asc' },
       select: { id: true, name: true, type: true, contact: true, balance: true }
@@ -27,7 +27,7 @@ export default async function PayrollPage() {
     prisma.bank.findMany({
       select: { id: true, bankName: true, accountNumber: true }
     }).catch(() => [])
-  ]);
+  ]), 3000);
 
   return (
     <div className="min-h-screen">
