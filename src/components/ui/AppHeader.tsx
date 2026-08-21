@@ -235,10 +235,13 @@ export function AppHeader({
                 type="button"
                 onClick={async () => {
                   if (typeof window !== 'undefined') {
-                    sessionStorage.removeItem('erpsplash_shown');
+                    sessionStorage.clear();
+                    localStorage.removeItem('ricemill_last_active_timestamp');
                   }
-                  await signOut({ callbackUrl: '/login', redirect: true });
-                  window.location.href = '/login';
+                  await signOut({ callbackUrl: '/login', redirect: false });
+                  if (typeof window !== 'undefined') {
+                    window.location.href = '/login';
+                  }
                 }}
                 className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white font-black uppercase tracking-wider text-xs rounded-xl shadow-lg transition-colors flex items-center justify-center gap-2"
               >

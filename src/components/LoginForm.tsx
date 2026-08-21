@@ -33,6 +33,7 @@ export default function LoginForm() {
       } else {
         if (typeof window !== 'undefined') {
           sessionStorage.removeItem('erpsplash_shown');
+          localStorage.setItem('ricemill_last_active_timestamp', Date.now().toString());
         }
         router.push('/dashboard');
         router.refresh();
