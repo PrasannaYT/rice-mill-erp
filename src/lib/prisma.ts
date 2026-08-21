@@ -22,11 +22,13 @@ const prismaClientSingleton = () => {
           try {
             return await query(args);
           } catch (err: any) {
-            if (err?.message?.includes('timed out') || err?.code === 'P2024' || err?.code === 'P1001') {
-              await new Promise(r => setTimeout(r, 150));
-              return await query(args).catch(() => []);
+            await new Promise(r => setTimeout(r, 100));
+            try {
+              return await query(args);
+            } catch (err2) {
+              console.error(`Prisma findMany query failed on ${model}:`, err2);
+              return [];
             }
-            return [];
           }
         },
         async findFirst({ model, args, query }) {
@@ -36,11 +38,13 @@ const prismaClientSingleton = () => {
           try {
             return await query(args);
           } catch (err: any) {
-            if (err?.message?.includes('timed out') || err?.code === 'P2024' || err?.code === 'P1001') {
-              await new Promise(r => setTimeout(r, 150));
-              return await query(args).catch(() => null);
+            await new Promise(r => setTimeout(r, 100));
+            try {
+              return await query(args);
+            } catch (err2) {
+              console.error(`Prisma findFirst query failed on ${model}:`, err2);
+              return null;
             }
-            return null;
           }
         },
         async findUnique({ model, args, query }) {
@@ -51,15 +55,17 @@ const prismaClientSingleton = () => {
             }
             return result;
           } catch (err: any) {
-            if (err?.message?.includes('timed out') || err?.code === 'P2024' || err?.code === 'P1001') {
-              await new Promise(r => setTimeout(r, 150));
-              const result = await query(args).catch(() => null);
+            await new Promise(r => setTimeout(r, 100));
+            try {
+              const result = await query(args);
               if (modelsWithSoftDelete.has(model) && result && (result as any).deletedAt) {
                 return null;
               }
               return result;
+            } catch (err2) {
+              console.error(`Prisma findUnique query failed on ${model}:`, err2);
+              return null;
             }
-            return null;
           }
         },
         async count({ model, args, query }) {
@@ -69,11 +75,12 @@ const prismaClientSingleton = () => {
           try {
             return await query(args);
           } catch (err: any) {
-            if (err?.message?.includes('timed out') || err?.code === 'P2024' || err?.code === 'P1001') {
-              await new Promise(r => setTimeout(r, 150));
-              return await query(args).catch(() => 0);
+            await new Promise(r => setTimeout(r, 100));
+            try {
+              return await query(args);
+            } catch {
+              return 0;
             }
-            return 0;
           }
         },
         async aggregate({ model, args, query }) {
@@ -83,11 +90,12 @@ const prismaClientSingleton = () => {
           try {
             return await query(args);
           } catch (err: any) {
-            if (err?.message?.includes('timed out') || err?.code === 'P2024' || err?.code === 'P1001') {
-              await new Promise(r => setTimeout(r, 150));
-              return await query(args).catch(() => ({}));
+            await new Promise(r => setTimeout(r, 100));
+            try {
+              return await query(args);
+            } catch {
+              return {};
             }
-            return {};
           }
         },
         async groupBy({ model, args, query }) {
@@ -97,11 +105,12 @@ const prismaClientSingleton = () => {
           try {
             return await query(args);
           } catch (err: any) {
-            if (err?.message?.includes('timed out') || err?.code === 'P2024' || err?.code === 'P1001') {
-              await new Promise(r => setTimeout(r, 150));
-              return await query(args).catch(() => []);
+            await new Promise(r => setTimeout(r, 100));
+            try {
+              return await query(args);
+            } catch {
+              return [];
             }
-            return [];
           }
         }
       }

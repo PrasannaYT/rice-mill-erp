@@ -63,16 +63,22 @@ export function invalidateCache(keyPrefix?: string): void {
 
 /**
  * Wraps an async database query with microsecond RAM caching.
+ * Does NOT cache empty arrays unless cacheEmpty is explicitly true,
+ * preventing temporary DB cold-start query fallbacks from polluting the RAM cache.
  */
 export async function withMemoryCache<T>(
   key: string,
   fetcher: () => Promise<T>,
-  ttlMs: number = DEFAULT_TTL_MS
+  ttlMs: number = DEFAULT_TTL_MS,
+  cacheEmpty: boolean = false
 ): Promise<T> {
   const cached = getCachedData<T>(key);
   if (cached !== null) {
     return cached;
   }
   const fresh = await fetcher();
+  if (!cacheEmpty && Array.isArray(fresh) && fresh.length === 0) {
+    return fresh;
+  }
   return setCachedData<T>(key, fresh, ttlMs);
 }
