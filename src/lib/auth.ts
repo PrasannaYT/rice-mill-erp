@@ -91,6 +91,16 @@ export const authOptions: NextAuthOptions = {
         session.user.role = token.role as any;
       }
       return session;
+    },
+    async redirect({ url, baseUrl }: { url: string; baseUrl: string }) {
+      if (url.startsWith("/")) return `${baseUrl}${url}`;
+      try {
+        const parsedUrl = new URL(url);
+        if (parsedUrl.origin === baseUrl || parsedUrl.hostname.endsWith('millerp.site') || parsedUrl.hostname.endsWith('vercel.app')) {
+          return url;
+        }
+      } catch (_) {}
+      return baseUrl;
     }
   },
   pages: {
