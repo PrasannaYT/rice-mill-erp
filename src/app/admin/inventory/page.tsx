@@ -167,16 +167,17 @@ export default async function AdminInventoryPage({ searchParams }: { searchParam
 
   const syntheticPackingProcurements = rawPackingItems.map(item => {
     const procuredQty = Number(item.initialQuantityBags) > 0 ? Number(item.initialQuantityBags) : Number(item.quantityBags);
+    const isOpeningStock = !item.supplierId || !item.supplier;
 
     return {
       id: `proc_${item.id}`,
-      type: 'PROCUREMENT',
+      type: isOpeningStock ? 'OPENING_STOCK' : 'PROCUREMENT',
       quantity: procuredQty,
       createdAt: item.createdAt.toISOString(),
       productName: `${item.brandName} ${Number(item.capacityKg)} KG`,
       productId: item.id,
       productCategory: 'PACKAGING_MATERIAL',
-      fromGodownName: item.supplier?.name || 'Supplier',
+      fromGodownName: isOpeningStock ? 'Existing Opening Stock' : (item.supplier?.name || 'Supplier'),
       toGodownName: item.godown?.name || 'Godown'
     };
   });
