@@ -16,7 +16,7 @@ export default async function PersonalDebtPage() {
     redirect('/dashboard');
   }
 
-  const loans = await PersonalDebtRepository.listLoans();
+  const loans = await PersonalDebtRepository.listLoans().catch(() => []);
 
   // Convert Decimals to numbers for the client component
   const formattedLoans = loans.map(loan => {

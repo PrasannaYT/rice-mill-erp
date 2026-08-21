@@ -34,23 +34,23 @@ export default async function SalesPage() {
       prisma.customer.findMany({
         orderBy: { name: 'asc' },
         select: { id: true, name: true, contact: true, gstin: true, address: true, balance: true }
-      }),
+      }).catch(() => []),
       prisma.vehicle.findMany({
         orderBy: { licensePlate: 'asc' },
         select: { id: true, licensePlate: true, type: true }
-      }),
+      }).catch(() => []),
       prisma.product.findMany({
         orderBy: { name: 'asc' },
         select: { id: true, name: true, gstRate: true }
-      }),
+      }).catch(() => []),
       prisma.godown.findMany({
         orderBy: { name: 'asc' },
         select: { id: true, name: true, type: true }
-      }),
+      }).catch(() => []),
       prisma.lot.findMany({
         where: { status: 'ACTIVE' },
         select: { id: true, productId: true, godownId: true, currentQuantity: true }
-      }),
+      }).catch(() => []),
       prisma.packingItem.findMany({
         select: {
           id: true,
@@ -62,7 +62,7 @@ export default async function SalesPage() {
           godown: { select: { name: true } }
         },
         orderBy: { brandName: 'asc' }
-      }),
+      }).catch(() => []),
       prisma.salesInvoice.findMany({
         where: { status: 'DRAFT', userId: session.user.id },
         select: {
@@ -95,7 +95,7 @@ export default async function SalesPage() {
           }
         },
         orderBy: { createdAt: 'desc' }
-      })
+      }).catch(() => [])
     ]);
   } catch (err) {
     console.error("Failed to load sales page dependencies:", err);

@@ -23,10 +23,10 @@ export default async function PayrollPage() {
     prisma.laborer.findMany({
       orderBy: { name: 'asc' },
       select: { id: true, name: true, type: true, contact: true, balance: true }
-    }),
+    }).catch(() => []),
     prisma.bank.findMany({
       select: { id: true, bankName: true, accountNumber: true }
-    })
+    }).catch(() => [])
   ]);
 
   return (

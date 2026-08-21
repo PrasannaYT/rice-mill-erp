@@ -14,21 +14,20 @@ export default async function VehiclesPage() {
     redirect('/dashboard');
   }
 
-  const vehicles = await VehicleRepository.list();
-  
-  const drivers = await prisma.laborer.findMany({
-    where: { type: 'DRIVER' },
-    select: { id: true, name: true }
-  });
-  
-  const banks = await prisma.bank.findMany({
-    select: { id: true, bankName: true, accountNumber: true }
-  });
-  
-  const expenses = await prisma.expenseCategory.findMany({
-    where: { type: 'EXPENSE' },
-    select: { id: true, name: true }
-  });
+  const [vehicles, drivers, banks, expenses] = await Promise.all([
+    VehicleRepository.list().catch(() => []),
+    prisma.laborer.findMany({
+      where: { type: 'DRIVER' },
+      select: { id: true, name: true }
+    }).catch(() => []),
+    prisma.bank.findMany({
+      select: { id: true, bankName: true, accountNumber: true }
+    }).catch(() => []),
+    prisma.expenseCategory.findMany({
+      where: { type: 'EXPENSE' },
+      select: { id: true, name: true }
+    }).catch(() => [])
+  ]);
 
   // We map the Date objects to string for Client Components to avoid serialization errors
   const serializedVehicles = vehicles.map(v => ({

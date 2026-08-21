@@ -17,7 +17,7 @@ export default async function AdminUsersPage() {
     redirect('/dashboard');
   }
 
-  const users = await UserRepository.list();
+  const users = await UserRepository.list().catch(() => []);
 
   // KPIs
   const totalUsers = users.length;

@@ -34,10 +34,10 @@ export default async function WeighbridgePage({ searchParams }: { searchParams: 
     pendingDrafts,
     farmersWithHistory
   ] = await Promise.all([
-    SupplierRepository.list(),
-    prisma.farmer.findMany({ select: { id: true, name: true, brokerId: true } }),
-    ProductRepository.list(),
-    GodownRepository.list(),
+    SupplierRepository.list().catch(() => []),
+    prisma.farmer.findMany({ select: { id: true, name: true, brokerId: true } }).catch(() => []),
+    ProductRepository.list().catch(() => []),
+    GodownRepository.list().catch(() => []),
     prisma.procurementBatch.findMany({
       where: { status: 'DRAFT' },
       select: {
@@ -59,7 +59,7 @@ export default async function WeighbridgePage({ searchParams }: { searchParams: 
         farmer: { select: { name: true } },
       },
       orderBy: { createdAt: 'desc' }
-    }),
+    }).catch(() => []),
     prisma.farmer.findMany({
       select: {
         id: true,
@@ -80,7 +80,7 @@ export default async function WeighbridgePage({ searchParams }: { searchParams: 
           orderBy: { createdAt: 'desc' }
         }
       }
-    })
+    }).catch(() => [])
   ]);
 
   const safeSuppliers = allSuppliers.map(s => ({ id: s.id, name: s.name, category: s.category || 'PADDY_BROKER' }));
