@@ -81,7 +81,7 @@ export default async function WeighbridgePage({ searchParams }: { searchParams: 
         }
       }
     }).catch(() => [])
-  ]);
+  ]), 3000);
 
   const safeSuppliers = allSuppliers.map(s => ({ id: s.id, name: s.name, category: s.category || 'PADDY_BROKER' }));
   const safeFarmers = allFarmers.map(f => ({ id: f.id, name: f.name, brokerId: f.brokerId }));
