@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { ArrowLeft, LogOut, Wifi, WifiOff, Wheat } from 'lucide-react';
 import { signOut, useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 
 export interface BreadcrumbItem {
   label: string;
@@ -57,6 +58,7 @@ export function AppHeader({
   showLogo = false,
   isOnline = null,
 }: AppHeaderProps) {
+  const router = useRouter();
   const { data: session } = useSession();
   const role = session?.user?.role ?? '';
   const name = session?.user?.name ?? '';
@@ -72,6 +74,12 @@ export function AppHeader({
     });
     setCurrentDate(formatter.format(new Date()));
   }, []);
+
+  const prefetchRoute = (href?: string) => {
+    if (href) {
+      try { router.prefetch(href); } catch (_) {}
+    }
+  };
 
   return (
     <header className="sticky top-0 z-[45] bg-[#0A0A0A]/95 backdrop-blur-md border-b border-[#F5A623]/20 transform-gpu will-change-transform">
@@ -91,7 +99,7 @@ export function AppHeader({
               </div>
             </div>
           ) : showBack ? (
-            <Link href={backHref} aria-label="Go back">
+            <Link href={backHref} aria-label="Go back" onMouseEnter={() => prefetchRoute(backHref)}>
               <div className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center bg-neutral-900 border border-neutral-800 rounded-xl hover:border-[#F5A623]/60 hover:bg-neutral-800 transition-all active:scale-95 shrink-0 group">
                 <ArrowLeft className="w-4 h-4 text-[#F5A623] group-hover:text-[#F5A623]" />
               </div>
@@ -104,7 +112,7 @@ export function AppHeader({
               {breadcrumbs.map((bc, i) => (
                 <span key={i} className="flex items-center gap-1.5">
                   {bc.href ? (
-                    <Link href={bc.href} className="hover:text-neutral-400 transition-colors">{bc.label}</Link>
+                    <Link href={bc.href} onMouseEnter={() => prefetchRoute(bc.href)} className="hover:text-neutral-400 transition-colors">{bc.label}</Link>
                   ) : (
                     <span>{bc.label}</span>
                   )}
