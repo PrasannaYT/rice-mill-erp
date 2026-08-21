@@ -30,6 +30,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import MillingConversionModal from './MillingConversionModal';
 import ExistingPaddyStockModal from './ExistingPaddyStockModal';
+import AddPackagingStockModal from './AddPackagingStockModal';
 import Link from 'next/link';
 import { AppHeader } from '@/components/ui/AppHeader';
 import SparesScrapTab from './SparesScrapTab';
@@ -65,6 +66,7 @@ interface InventoryDashboardClientProps {
       } | null;
     }[];
   }[];
+  suppliers?: { id: string; name: string }[];
   paddyProducts: {
     id: string;
     name: string;
@@ -98,6 +100,7 @@ interface InventoryDashboardClientProps {
 
 export default function InventoryDashboardClient({
   godowns,
+  suppliers = [],
   paddyProducts,
   allLots,
   packingItems,
@@ -186,6 +189,7 @@ export default function InventoryDashboardClient({
 
   // Opening Stock Modal
   const [isOpeningStockModalOpen, setIsOpeningStockModalOpen] = useState(false);
+  const [isAddPackagingModalOpen, setIsAddPackagingModalOpen] = useState(false);
 
   // Monitor Network Status
   useEffect(() => {
@@ -785,16 +789,26 @@ export default function InventoryDashboardClient({
                 aria-label="Branded Packaging Materials" 
                 className="space-y-6"
               >
-                <div className="flex justify-between items-center">
+                <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
                   <h2 className="text-xs font-black uppercase tracking-wider text-neutral-400 flex items-center gap-2">
                     <span>📦</span> Branded Packaging Bags ({groupedPackingItems.length})
                   </h2>
 
-                  <Link href="/operator/procurement?tab=packaging">
-                    <button className="px-3.5 py-2.5 bg-[#F5A623] text-black font-black text-xs uppercase tracking-wider rounded-xl shadow-lg border-2 border-black flex items-center gap-1.5 active:scale-95 transition-all min-h-[44px]">
-                      <span>Procure</span> <ArrowRight className="w-3.5 h-3.5" />
+                  <div className="flex gap-2 w-full sm:w-auto">
+                    <button
+                      type="button"
+                      onClick={() => setIsAddPackagingModalOpen(true)}
+                      className="flex-1 sm:flex-none px-4 py-2.5 bg-neutral-800 hover:bg-neutral-700 text-white font-display font-bold text-[10px] sm:text-xs uppercase tracking-wider rounded-xl shadow-lg border-2 border-neutral-700 flex items-center justify-center gap-1.5 active:scale-95 transition-all min-h-[44px]"
+                    >
+                      <Plus className="w-4 h-4 shrink-0 text-[#F5A623]" />
+                      <span>[ ADD PACKAGING STOCK ]</span>
                     </button>
-                  </Link>
+                    <Link href="/operator/procurement?tab=packaging">
+                      <button className="flex-1 sm:flex-none px-3.5 py-2.5 bg-[#F5A623] hover:bg-[#d98e19] text-black font-black text-xs uppercase tracking-wider rounded-xl shadow-lg border-2 border-black flex items-center justify-center gap-1.5 active:scale-95 transition-all min-h-[44px]">
+                        <span>Procure</span> <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </Link>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1070,6 +1084,14 @@ export default function InventoryDashboardClient({
         onClose={() => setIsOpeningStockModalOpen(false)}
         paddyProducts={paddyProducts}
         godowns={godowns}
+      />
+
+      <AddPackagingStockModal
+        isOpen={isAddPackagingModalOpen}
+        onClose={() => setIsAddPackagingModalOpen(false)}
+        godowns={godowns}
+        suppliers={suppliers}
+        existingBrandNames={Array.from(new Set((packingItems || []).map(p => p.brandName)))}
       />
 
     </main>

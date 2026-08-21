@@ -246,6 +246,7 @@ export default async function AdminInventoryPage({ searchParams }: { searchParam
     <div className="min-h-screen">
       <InventoryDashboardClient
         godowns={safeGodownsForClient}
+        suppliers={suppliers}
         paddyProducts={paddyProducts.length > 0 ? paddyProducts : safeProducts}
         allLots={allLots}
         packingItems={packingItems}

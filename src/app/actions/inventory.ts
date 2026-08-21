@@ -82,3 +82,41 @@ export async function addPaddyOpeningStockAction(formData: FormData) {
   revalidatePath('/dashboard');
   revalidatePath('/admin/reports');
 }
+
+export async function addPackagingOpeningStockAction(formData: FormData) {
+  const session = await checkAuth();
+
+  const brandName = (formData.get('brandName') as string || '').trim();
+  const capacityKg = parseFloat(formData.get('capacityKg') as string) || 0;
+  const quantityBags = parseFloat(formData.get('quantityBags') as string) || 0;
+  const perBagRate = parseFloat(formData.get('perBagRate') as string) || 0;
+  const godownId = formData.get('godownId') as string;
+  const supplierId = (formData.get('supplierId') as string) || null;
+  const hsnCode = (formData.get('hsnCode') as string) || null;
+
+  if (!brandName) throw new Error("Brand/Bag name is required");
+  if (capacityKg <= 0) throw new Error("Capacity in KG must be positive");
+  if (quantityBags <= 0) throw new Error("Quantity of bags must be positive");
+  if (perBagRate <= 0) throw new Error("Rate per bag must be positive");
+  if (!godownId) throw new Error("Target Godown is required");
+
+  const { PackingItemRepository } = await import("@/repositories/packingItemRepository");
+  const { invalidateCache } = await import("@/lib/memoryCache");
+
+  await PackingItemRepository.create({
+    brandName,
+    capacityKg,
+    quantityBags,
+    perBagRate,
+    godownId,
+    supplierId,
+    hsnCode,
+    status: 'PAID'
+  });
+
+  invalidateCache('admin:inventory');
+  revalidatePath('/admin/inventory');
+  revalidatePath('/operator/procurement');
+  revalidatePath('/dashboard');
+  revalidatePath('/admin/reports');
+}
