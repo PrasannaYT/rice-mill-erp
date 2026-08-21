@@ -13,6 +13,7 @@ import {
 import { ReportService } from "@/services/reportService";
 import { AppHeader } from "@/components/ui/AppHeader";
 import DashboardWelcomeWrapper from "@/components/DashboardWelcomeWrapper";
+import { withMemoryCache } from "@/lib/memoryCache";
 
 export const dynamic = 'force-dynamic';
 
@@ -172,7 +173,7 @@ export default async function DashboardPage() {
   const in15Days = new Date();
   in15Days.setDate(in15Days.getDate() + 15);
 
-  const [expiringVehicles, pnl, pendingPayments, laborCount] = await Promise.all([
+  const [expiringVehicles, pnlData, pendingPayments, laborCount] = await Promise.all([
     prisma.vehicle.findMany({
       where: {
         ownershipType: 'OWNED',
@@ -184,12 +185,14 @@ export default async function DashboardPage() {
       },
       select: { licensePlate: true }
     }).catch(() => []),
-    ReportService.generatePnL().catch(() => null),
+    withMemoryCache('dashboard:pnl-summary', () => ReportService.generatePnL().catch(() => null), 10000),
     prisma.salesInvoice.count({
       where: { status: { in: ['FINALIZED', 'PARTIALLY_PAID'] } }
     }).catch(() => 0),
     prisma.laborer.count().catch(() => 0),
   ]);
+
+  const pnl = pnlData || { revenue: 0, netProfit: 0 };
 
   const today = new Date();
   const greeting = today.getHours() < 12 ? 'Good Morning' : today.getHours() < 17 ? 'Good Afternoon' : 'Good Evening';
@@ -236,7 +239,7 @@ export default async function DashboardPage() {
         </div>
 
         {/* ── KPI STRIP ── */}
-        {pnl && (role === 'ADMIN' || role === 'MANAGER' || role === 'MILL_OWNER') && (
+        {(role === 'ADMIN' || role === 'MANAGER' || role === 'MILL_OWNER' || role === 'SUPER_ADMIN') && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
               {
