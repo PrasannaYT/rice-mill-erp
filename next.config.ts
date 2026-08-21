@@ -20,6 +20,15 @@ const nextConfig: NextConfig = {
     ],
   },
   allowedDevOrigins: ['192.168.0.106', '192.168.0.103', '192.168.241.1', '192.168.0.101', '192.168.0.102', '192.168.0.104', '192.168.0.105', '192.168.0.112'],
+  async redirects() {
+    return [
+      {
+        source: '/lander',
+        destination: '/login',
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
       {
