@@ -100,10 +100,13 @@ export default function AddPackagingStockModal({ isOpen, onClose, godowns, suppl
             className="relative w-full max-w-lg bg-[#111] border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden"
           >
             <div className="flex items-center justify-between p-5 border-b border-neutral-800 bg-[#1A1A1A]">
-              <h2 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-2">
-                <Package className="w-5 h-5 text-[#F5A623]" />
-                Add Packaging Bag Stock
-              </h2>
+              <div>
+                <h2 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-2">
+                  <Package className="w-5 h-5 text-[#F5A623]" />
+                  Add Existing Packaging Stock
+                </h2>
+                <p className="text-xs text-neutral-400 mt-0.5 font-medium">Record opening balance of empty packaging bags in godowns</p>
+              </div>
               <button onClick={onClose} className="p-2 hover:bg-neutral-800 rounded-xl transition-colors">
                 <X className="w-5 h-5 text-neutral-400" />
               </button>
