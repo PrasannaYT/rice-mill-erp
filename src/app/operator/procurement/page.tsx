@@ -6,8 +6,8 @@ import { redirect } from "next/navigation";
 import { SupplierRepository, ProductRepository, GodownRepository } from "@/repositories/masterDataRepository";
 import WeighbridgeForm from "@/components/WeighbridgeForm";
 import prisma from "@/lib/prisma";
-
 import { AppHeader } from "@/components/ui/AppHeader";
+import { withMemoryCache } from "@/lib/memoryCache";
 
 export const metadata = {
   title: 'Procurement - Rice Mill ERP',
@@ -25,7 +25,7 @@ export default async function WeighbridgePage({ searchParams }: { searchParams: 
     redirect('/login');
   }
 
-  // Parallel fan-out: execute all 6 independent database queries concurrently
+  // Rapid reload & fast render protection: wrap database queries with 3-second RAM cache
   const [
     allSuppliers,
     allFarmers,
@@ -33,7 +33,7 @@ export default async function WeighbridgePage({ searchParams }: { searchParams: 
     allGodowns,
     pendingDrafts,
     farmersWithHistory
-  ] = await Promise.all([
+  ] = await withMemoryCache('operator:procurement:page-data', () => Promise.all([
     SupplierRepository.list().catch(() => []),
     prisma.farmer.findMany({ select: { id: true, name: true, brokerId: true } }).catch(() => []),
     ProductRepository.list().catch(() => []),

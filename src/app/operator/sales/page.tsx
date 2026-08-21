@@ -5,8 +5,8 @@ import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import prisma from "@/lib/prisma";
 import SalesForm from "@/components/SalesForm";
-
 import { AppHeader } from "@/components/ui/AppHeader";
+import { withMemoryCache } from "@/lib/memoryCache";
 
 export const metadata = {
   title: 'Sales & Dispatch - Rice Mill ERP',
@@ -30,7 +30,7 @@ export default async function SalesPage() {
       lots,
       rawPackingItems,
       pendingDraftsRaw
-    ] = await Promise.all([
+    ] = await withMemoryCache('operator:sales:page-data', () => Promise.all([
       prisma.customer.findMany({
         orderBy: { name: 'asc' },
         select: { id: true, name: true, contact: true, gstin: true, address: true, balance: true }
@@ -96,7 +96,7 @@ export default async function SalesPage() {
         },
         orderBy: { createdAt: 'desc' }
       }).catch(() => [])
-    ]);
+    ]), 3000);
   } catch (err) {
     console.error("Failed to load sales page dependencies:", err);
   }

@@ -4,11 +4,20 @@ const nextConfig: NextConfig = {
   devIndicators: false,
   compress: true,
   reactStrictMode: true,
+  poweredByHeader: false,
+  serverExternalPackages: ['@prisma/client', 'bcryptjs', 'decimal.js'],
   experimental: {
     staleTimes: {
-      dynamic: 30,
-      static: 180,
+      dynamic: 60,
+      static: 300,
     },
+    optimizePackageImports: [
+      'lucide-react',
+      'framer-motion',
+      'recharts',
+      'clsx',
+      'tailwind-merge'
+    ],
   },
   allowedDevOrigins: ['192.168.0.106', '192.168.0.103', '192.168.241.1', '192.168.0.101', '192.168.0.102', '192.168.0.104', '192.168.0.105', '192.168.0.112'],
   async headers() {
@@ -46,8 +55,6 @@ const nextConfig: NextConfig = {
           }
         ],
       },
-      // Aggressive caching for static assets (images, fonts, videos)
-      // These files are fingerprinted by Next.js so stale cache is not an issue
       {
         source: '/:path*.(png|jpg|jpeg|webp|avif|ico|svg|woff|woff2|ttf|eot|mp4)',
         headers: [
