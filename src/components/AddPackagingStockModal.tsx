@@ -44,8 +44,8 @@ export default function AddPackagingStockModal({ isOpen, onClose, godowns, suppl
       toast.error('Please select a target Godown');
       return;
     }
-    if (parsedBags <= 0 || parseFloat(capacityKg) <= 0 || parsedRate <= 0) {
-      toast.error('Bags, Capacity, and Rate must be greater than zero');
+    if (parsedBags <= 0 || parseFloat(capacityKg) <= 0) {
+      toast.error('Bags and Capacity must be greater than zero');
       return;
     }
 
@@ -55,7 +55,7 @@ export default function AddPackagingStockModal({ isOpen, onClose, godowns, suppl
       fd.append('brandName', finalBrandName);
       fd.append('capacityKg', capacityKg);
       fd.append('quantityBags', quantityBags);
-      fd.append('perBagRate', perBagRate);
+      fd.append('perBagRate', perBagRate || '0');
       fd.append('godownId', godownId);
       if (supplierId) fd.append('supplierId', supplierId);
       if (hsnCode) fd.append('hsnCode', hsnCode);
@@ -164,13 +164,12 @@ export default function AddPackagingStockModal({ isOpen, onClose, godowns, suppl
                   step="1"
                 />
                 <Input
-                  label="Rate / Bag (₹) *"
+                  label="Rate / Bag (Optional)"
                   type="number"
                   value={perBagRate}
                   onChange={e => setPerBagRate(e.target.value)}
-                  placeholder="e.g. 18.50"
-                  required
-                  min="0.01"
+                  placeholder="e.g. 18.50 (Optional)"
+                  min="0"
                   step="0.01"
                 />
               </div>

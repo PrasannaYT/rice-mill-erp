@@ -97,7 +97,7 @@ export async function addPackagingOpeningStockAction(formData: FormData) {
   if (!brandName) throw new Error("Brand/Bag name is required");
   if (capacityKg <= 0) throw new Error("Capacity in KG must be positive");
   if (quantityBags <= 0) throw new Error("Quantity of bags must be positive");
-  if (perBagRate <= 0) throw new Error("Rate per bag must be positive");
+  if (perBagRate < 0) throw new Error("Rate per bag cannot be negative");
   if (!godownId) throw new Error("Target Godown is required");
 
   const { PackingItemRepository } = await import("@/repositories/packingItemRepository");
