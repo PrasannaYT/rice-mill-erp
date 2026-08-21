@@ -15,6 +15,20 @@ type CacheEntry<T> = {
 const memoryStore = new Map<string, CacheEntry<any>>();
 
 const DEFAULT_TTL_MS = 60 * 1000; // 1 minute RAM TTL
+const MAX_CACHE_ENTRIES = 100;
+
+function purgeExpiredKeys() {
+  const now = Date.now();
+  for (const [key, entry] of memoryStore.entries()) {
+    if (now > entry.expiresAt) {
+      memoryStore.delete(key);
+    }
+  }
+  if (memoryStore.size > MAX_CACHE_ENTRIES) {
+    const oldestKey = memoryStore.keys().next().value;
+    if (oldestKey) memoryStore.delete(oldestKey);
+  }
+}
 
 export function getCachedData<T>(key: string): T | null {
   const entry = memoryStore.get(key);
@@ -27,6 +41,7 @@ export function getCachedData<T>(key: string): T | null {
 }
 
 export function setCachedData<T>(key: string, data: T, ttlMs: number = DEFAULT_TTL_MS): T {
+  purgeExpiredKeys();
   memoryStore.set(key, {
     data,
     expiresAt: Date.now() + ttlMs,
