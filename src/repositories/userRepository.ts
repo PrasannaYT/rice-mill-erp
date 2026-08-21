@@ -34,8 +34,12 @@ export class UserRepository {
   }
 
   static async list(): Promise<User[]> {
-    return prisma.user.findMany({ take: 1000, orderBy: { createdAt: 'desc' },
-    });
+    let result = await prisma.user.findMany({ take: 1000, orderBy: { createdAt: 'desc' } }).catch(() => []);
+    if (result.length === 0) {
+      await new Promise(r => setTimeout(r, 150));
+      result = await prisma.user.findMany({ take: 1000, orderBy: { createdAt: 'desc' } }).catch(() => []);
+    }
+    return result;
   }
 
   static async delete(id: string): Promise<User> {

@@ -5,6 +5,7 @@ import { UserRepository } from "@/repositories/userRepository";
 import { AppHeader } from "@/components/ui/AppHeader";
 import UserTable from "@/components/UserTable";
 import { Users, Shield, HardHat } from "lucide-react";
+import { withMemoryCache } from "@/lib/memoryCache";
 
 export const metadata = {
   title: 'User Management - Rice Mill ERP',
@@ -17,7 +18,7 @@ export default async function AdminUsersPage() {
     redirect('/dashboard');
   }
 
-  const users = await UserRepository.list().catch(() => []);
+  const users = await withMemoryCache('admin:users:list', () => UserRepository.list().catch(() => []), 3000);
 
   // KPIs
   const totalUsers = users.length;

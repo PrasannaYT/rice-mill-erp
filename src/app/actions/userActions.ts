@@ -6,6 +6,7 @@ import { UserRepository } from "@/repositories/userRepository";
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { invalidateCache } from "@/lib/memoryCache";
 
 async function checkAdminAuth() {
   const session = await getServerSession(authOptions);
@@ -67,6 +68,7 @@ export async function createUserAction(formData: FormData): Promise<void> {
       isActive: true,
     });
     
+    invalidateCache('admin:users');
     revalidatePath('/admin/users');
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : "Failed to create user");
@@ -87,6 +89,7 @@ export async function deleteUserAction(formData: FormData): Promise<void> {
     }
 
     await UserRepository.delete(parsed.data.id);
+    invalidateCache('admin:users');
     revalidatePath('/admin/users');
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : "Failed to delete user");
@@ -112,6 +115,7 @@ export async function updateUserAction(formData: FormData): Promise<void> {
       role: parsed.data.role,
       isActive: parsed.data.isActive,
     });
+    invalidateCache('admin:users');
     revalidatePath('/admin/users');
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : "Failed to update user");
@@ -133,6 +137,7 @@ export async function resetPasswordAction(formData: FormData): Promise<void> {
 
     const passwordHash = await bcrypt.hash(parsed.data.password, 10);
     await UserRepository.update(parsed.data.id, { passwordHash });
+    invalidateCache('admin:users');
     revalidatePath('/admin/users');
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : "Failed to reset password");
