@@ -6,7 +6,10 @@ export class UserRepository {
     const cleanEmail = email.trim().toLowerCase();
     return prisma.user.findFirst({
       where: {
-        email: { equals: cleanEmail, mode: 'insensitive' }
+        OR: [
+          { email: cleanEmail },
+          { email: { equals: cleanEmail, mode: 'insensitive' } }
+        ]
       },
     });
   }
